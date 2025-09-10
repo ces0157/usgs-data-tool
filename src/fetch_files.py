@@ -4,7 +4,7 @@ import json
 
 BASE_URL = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
-def fetch_lidar_data(bbox, type, usgs_data):
+def fetch_lidar_data(bbox: tuple, type:str, usgs_data:dict) -> list[dict]:
     """
     Query The National Map (TNM) API for given lidar dataset
 
@@ -27,16 +27,16 @@ def fetch_lidar_data(bbox, type, usgs_data):
     return fetch_data(dataset_name, dataset_format, bbox)
 
 
-def fetch_dem_data(bbox, type, spec, usgs_data):
+def fetch_dem_data(bbox: tuple, type: str, spec: str, usgs_data:dict) -> list[dict]:
     """
     Query The National Map (TNM) API for given DEM dataset
 
     Args:
-        bbox (tuple): (minLon, minLat, maxLon, maxLat) in WGS84 (lon/lat).
-        type (str): (lidar, dem) datatype
-        spec (str): this type has dataset may have different types (seamsless versus regular).
+        bbox: (minLon, minLat, maxLon, maxLat) in WGS84 (lon/lat).
+        type: (lidar, dem) datatype
+        spec: this type has dataset may have different types (seamsless versus regular).
         Refer to USGS documenation
-        usgs_Data (Dict): json configuration holding names and format tpes 
+        usgs_Data: json configuration holding names and format tpes 
         
 
     Returns:
@@ -51,7 +51,7 @@ def fetch_dem_data(bbox, type, spec, usgs_data):
     return fetch_data(dataset_name, dataset_format, bbox)
 
 
-def fetch_data(dataset_name: str, dataset_format: str, bbox: dict) -> dict:
+def fetch_data(dataset_name: str, dataset_format: str, bbox: dict) -> list[dict]:
     """
     Query The National Map (TNM) API for given name, format, and bounding box
 
@@ -78,7 +78,6 @@ def fetch_data(dataset_name: str, dataset_format: str, bbox: dict) -> dict:
 
     data = response.json()
 
-    #print(data)
     results = []
 
     for item in data.get("items", []):

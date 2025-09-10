@@ -2,6 +2,7 @@ import argparse
 import os
 import json
 from fetch_files import fetch_lidar_data, fetch_dem_data
+from download import download_data
 
 
 def main():
@@ -42,8 +43,14 @@ def main():
     )
 
     args = parser.parse_args()
-
-
+    
+    #used to help ensure easy string additions later on in the code
+    if args.output_dir[-1] == "/":
+        output_dir = args.output_dir[:-1]
+    else:
+        output_dir = args.output_dir
+    
+    os.makedirs(output_dir, exist_ok=True)
 
     #load the usgs data information to allow for downloads
     curr_dir = os.path.dirname(os.path.abspath(__file__))
@@ -56,11 +63,12 @@ def main():
 
     bbox = tuple(args.aoi)
     if args.type == "lidar":
-        download_link = fetch_lidar_data(bbox, args.type, usgs_data)
+        download_info = fetch_lidar_data(bbox, args.type, usgs_data)
     elif args.type == "dem":
-        download_link = fetch_dem_data(bbox, args.type, args.dem_spec, usgs_data)
+        download_info = fetch_dem_data(bbox, args.type, args.dem_spec, usgs_data)
 
-
+    print(f"Found {len(download_info)} within the region of interest")
+    download_data(args.type, download_info, output_dir)
 
 
 
