@@ -21,9 +21,6 @@ def fetch_lidar_data(bbox: tuple, type:str, usgs_data:dict) -> list[dict]:
     dataset_name = usgs_data[type]["usgs_name"]
     dataset_format = usgs_data[type]["usgs_data_format"]
 
-    print(dataset_name)
-    print(dataset_format)
-
     return fetch_data(dataset_name, dataset_format, bbox)
 
 

@@ -54,7 +54,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     #load the usgs data information to allow for downloads
-    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    curr_dir = os.path.dirname(os.path.realpath(__file__))
     usgs_file = os.path.join(curr_dir, "usgs_data.json")
     
     
@@ -68,7 +68,7 @@ def main():
     elif args.type == "dem":
         download_info = fetch_dem_data(bbox, args.type, args.dem_spec, usgs_data)
 
-    print(f"Found {len(download_info)} within the region of interest")
+    print(f"Found {len(download_info)} files within the region of interest")
     download_data(args.type, download_info, output_dir)
 
 
