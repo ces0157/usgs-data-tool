@@ -1,6 +1,7 @@
 import argparse
 import os
 import json
+from fetch_files import fetch_lidar_data, fetch_dem_data
 
 
 def main():
@@ -20,7 +21,7 @@ def main():
     parser.add_argument(
         "--type",
         type=str,
-        choices=["dem", "lidar", "both"],
+        choices=["dem", "lidar"],
         help="Type of data to pull from USGS",
         required=True,
     )
@@ -33,7 +34,7 @@ def main():
     )
 
     parser.add_argument(
-        "--dem-type",
+        "--dem-spec",
         type=str,
         choices = ["regular", "seamless"],
         default = "regular",
@@ -48,10 +49,18 @@ def main():
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     usgs_file = os.path.join(curr_dir, "usgs_data.json")
     
+    
     with open(usgs_file, "r") as f:
         usgs_data = json.load(f)
 
-    print(usgs_data)
+
+    bbox = tuple(args.aoi)
+    if args.type == "lidar":
+        download_link = fetch_lidar_data(bbox, args.type, usgs_data)
+    elif args.type == "dem":
+        download_link = fetch_dem_data(bbox, args.type, args.dem_spec, usgs_data)
+
+
 
 
 
