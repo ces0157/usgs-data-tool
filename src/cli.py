@@ -1,5 +1,6 @@
 import argparse
 import os
+import json
 
 
 def main():
@@ -31,7 +32,27 @@ def main():
         required=True
     )
 
+    parser.add_argument(
+        "--dem-type",
+        type=str,
+        choices = ["regular", "seamless"],
+        default = "regular",
+        help="Type of DEM data to pull, seamless data is rare limited availability in the country"
+    )
+
     args = parser.parse_args()
+
+
+
+    #load the usgs data information to allow for downloads
+    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    usgs_file = os.path.join(curr_dir, "usgs_data.json")
+    
+    with open(usgs_file, "r") as f:
+        usgs_data = json.load(f)
+
+    print(usgs_data)
+
 
 
 

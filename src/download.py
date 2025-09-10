@@ -1,6 +1,8 @@
 import requests
+import os
+import json
 
-def get_one_meter_dem(bbox, type):
+def get_one_meter_dem(bbox, type, usgs_data):
     """
     Query The National Map (TNM) API for given dataset in a given bounding box.
 
@@ -12,6 +14,9 @@ def get_one_meter_dem(bbox, type):
         list of dicts containing dataset info and download URLs.
     """
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
+
+    
+    
 
     params = {
         "datasets": "Lidar Point Cloud (LPC)",
@@ -41,17 +46,17 @@ def get_one_meter_dem(bbox, type):
     return results
 
 
-if __name__ == "__main__":
-    # Example AOI: (minLon, minLat, maxLon, maxLat) around Denver, CO
-    bbox = (-84.45688,33.62848,-84.40212,33.65607)
+# if __name__ == "__main__":
+#     # Example AOI: (minLon, minLat, maxLon, maxLat) around Denver, CO
+#     bbox = (-84.45688,33.62848,-84.40212,33.65607)
 
-    dem_results = get_one_meter_dem(bbox)
+#     dem_results = get_one_meter_dem(bbox)
 
-    if dem_results:
-        for r in dem_results:
-            print(f"Title: {r['title']}")
-            print(f"Date: {r['publicationDate']}")
-            print(f"Format: {r['format']}")
-            print(f"Download: {r['downloadURL']}\n")
-    else:
-        print("No results found.")
+#     if dem_results:
+#         for r in dem_results:
+#             print(f"Title: {r['title']}")
+#             print(f"Date: {r['publicationDate']}")
+#             print(f"Format: {r['format']}")
+#             print(f"Download: {r['downloadURL']}\n")
+#     else:
+#         print("No results found.")

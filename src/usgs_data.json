@@ -1,6 +1,19 @@
 {
   "lidar": {
-    "usgs_name": "",
-    "usgs_datatype": ""
+    "usgs_name": "Lidar Point Cloud (LPC)",
+    "usgs_datatype": "LAS,LAZ"
+  },
+  "dem": {
+    "type" : {
+        "regular": {
+            "usgs_name": "Digital Elevation Model (DEM) 1 meter",
+            "usgs_datatype": "TIFF"
+        },
+        "seamless" : {
+            "usgs_name": "Seamless 1-meter DEM (Limited Availability)",
+            "usgs_datatype": "TIFF"
+        }
+    }
+   
   }
 }
