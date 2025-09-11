@@ -56,7 +56,7 @@ For example, suppose you wanted to contribute add a new request for the `NED` da
 }
 ```
 
-The `usgs_name` is the real name that is get's called from the API and the `usgs_data_format` is the format accepted for this dataset. See `src/fetch_files.py` for how this is properly used. Adding more to the json will require some modifications to the cli commands and how files are fetched. I plan on making `src/fetch_files.py` more generalizable in the future.
+The `usgs_name` is the real name that get's called from the API and the `usgs_data_format` is the format accepted for this dataset. See `src/fetch_files.py` for how this is properly used. Adding more to the json will require some modifications to the cli commands and how files are fetched. I plan on making `src/fetch_files.py` more generalizable in the future.
 
 # Attribution
 1. This repo was originally inspired from this [repo](https://github.com/DHersh3094/USGS-LiDAR-CLI-Tool/tree/master), but I just wanted to make it more expandable and easy to use with the USGS TNM API :)
