@@ -12,9 +12,6 @@ def merge_lidar(folders: list[str], keep_files: bool):
         folders: list of all the project folders (one merge per each folder)
         keep_files: weather to keep the original files afterwards
         
-
-    Returns:
-        list of dicts containing dataset info and download URLs.
     """
     for input_dir in folders:
         print(f"Merging laz files in {input_dir} ")

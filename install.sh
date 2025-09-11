@@ -33,6 +33,10 @@ conda activate "$ENV_NAME"
 echo "Installing PDAL and Python bindings..."
 conda install -y -c conda-forge pdal python-pdal
 
+# Install GDAL
+echo "Installing GDAL"
+conda install -y -c conda-forge gdal
+
 # --- Project-specific setup ---
 
 # 1. Install Python dependencies

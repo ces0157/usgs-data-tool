@@ -2,6 +2,7 @@ import os
 import requests
 from tqdm import tqdm
 from lidar_tools import merge_lidar
+from dem_tools import convert_tiff
 
 def download_data(args, download_information: dict, output_dir:str):
     """
@@ -29,7 +30,6 @@ def download_data(args, download_information: dict, output_dir:str):
 
         filename = os.path.join(project_dir, url.split("/")[-1])
         
-        print(url)
         #TODO: REMOVE verify is False and set up handeling
         r = requests.get(url, stream=True, timeout=20, verify=False)
         r.raise_for_status()   # raise if HTTP error (404, 500, etc.)
@@ -38,12 +38,18 @@ def download_data(args, download_information: dict, output_dir:str):
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
 
+        if args.type == "dem" and (args.dem_output != "tiff"):
+            print("Converting file ...")
+            convert_tiff(project_dir, filename, args.dem_output)
+
     
     if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
         if args.merge_lidar == "merge-keep":
             merge_lidar(project_dirs, True)
         else:
             merge_lidar(project_dirs, False)
+
+    
 
 
         

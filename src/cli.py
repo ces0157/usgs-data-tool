@@ -44,6 +44,14 @@ def main():
     )
 
     parser.add_argument(
+        "--dem-output",
+        type=str,
+        choices = ["tiff", "png", "raw"],
+        default = "tiff",
+        help="File type to save the Digital Elevation Maps"
+    )
+
+    parser.add_argument(
         "--merge-lidar",
         type=str,
         choices = ["no-merge", "merge-keep", "merge-delete"],
@@ -51,6 +59,7 @@ def main():
         help="For each project that gets downloaded merge or don't merge the .laz/.las files into a single pointcloud."
         "merge-keep keeps all original las/laz files. merge-delete removes all original files and only keeps the merged output "
     )
+
 
     args = parser.parse_args()
     
@@ -78,6 +87,7 @@ def main():
         download_info = fetch_dem_data(bbox, args.type, args.dem_spec, usgs_data)
 
     print(f"Found {len(download_info)} files within the region of interest")
+    print(args.dem_output)
     download_data(args, download_info, output_dir)
 
 
