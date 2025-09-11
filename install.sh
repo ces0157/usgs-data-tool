@@ -1,9 +1,39 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # Ensure script is run from project root
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLI_SCRIPT="$PROJECT_ROOT/src/cli.py"
+
+# --- Conda environment setup ---
+ENV_NAME="usgs-env"
+PYTHON_VERSION="3.10"
+
+# Check if conda is available
+if ! command -v conda &> /dev/null; then
+    echo "❌ Conda not found. Please install Miniconda or Anaconda first."
+    exit 1
+fi
+
+# Create conda environment if it doesn't exist
+if ! conda env list | grep -q "^${ENV_NAME} "; then
+    echo "Creating conda environment: $ENV_NAME"
+    conda create -y -n "$ENV_NAME" python=$PYTHON_VERSION
+else
+    echo "Conda environment '$ENV_NAME' already exists, skipping creation."
+fi
+
+# Activate the environment
+echo "Activating conda environment: $ENV_NAME"
+# shellcheck disable=SC1091
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV_NAME"
+
+# Install PDAL + Python bindings from conda-forge
+echo "Installing PDAL and Python bindings..."
+conda install -y -c conda-forge pdal python-pdal
+
+# --- Project-specific setup ---
 
 # 1. Install Python dependencies
 if [ -f "$PROJECT_ROOT/requirements.txt" ]; then
@@ -36,4 +66,5 @@ if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
 fi
 
 echo "✅ Installation complete! You can now run:"
+echo "   conda activate $ENV_NAME"
 echo "   usgs-download --help"

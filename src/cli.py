@@ -43,6 +43,15 @@ def main():
         help="Type of DEM data to pull, seamless data is rare limited availability in the country"
     )
 
+    parser.add_argument(
+        "--merge-lidar",
+        type=str,
+        choices = ["no-merge", "merge-keep", "merge-delete"],
+        default = "merge-keep",
+        help="For each project that gets downloaded merge or don't merge the .laz/.las files into a single pointcloud."
+        "merge-keep keeps all original las/laz files. merge-delete removes all original files and only keeps the merged output "
+    )
+
     args = parser.parse_args()
     
     #used to help ensure easy string additions later on in the code
@@ -69,7 +78,7 @@ def main():
         download_info = fetch_dem_data(bbox, args.type, args.dem_spec, usgs_data)
 
     print(f"Found {len(download_info)} files within the region of interest")
-    download_data(args.type, download_info, output_dir)
+    download_data(args, download_info, output_dir)
 
 
 

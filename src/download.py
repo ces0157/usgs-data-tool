@@ -1,28 +1,32 @@
 import os
 import requests
 from tqdm import tqdm
+from lidar_tools import merge_lidar
 
-def download_data(type: str, download_information: dict, output_dir:str):
+def download_data(args, download_information: dict, output_dir:str):
     """
     Download, save and merge (depending on datatypes) the file
 
     Args:
-        type: (lidar, dem) datatype
+        args: command line arguments from the cli
         
-        usgs_Data (Dict): json configuration holding names and format tpes 
-        
+        usgs_Data : json configuration holding names and format tpes 
 
     Returns:
         list of dicts containing dataset info and download URLs.
     """
-    print(f"Downloading {len(download_information)} {type} datasets")
+    project_dirs = set()
+    print(f"Downloading {len(download_information)} {args.type} datasets")
     for i in tqdm(range(0, len(download_information))):
-        
+        if i == 10:
+            break
         #get the name of the project we are downloading from
         url = download_information[i]["url"]
 
         project_name = url.split("Projects/")[1].split("/")[0]
-        project_dir = output_dir + "/" + type + "/" + project_name
+        project_dir = output_dir + "/" + args.type + "/" + project_name
+
+        project_dirs.add(project_dir)
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
@@ -32,6 +36,16 @@ def download_data(type: str, download_information: dict, output_dir:str):
         with open(filename, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
+
+    
+    if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
+        if args.merge_lidar == "merge-keep":
+            merge_lidar(project_dirs, True)
+        else:
+            merge_lidar(project_dirs, False)
+
+
+        
 
 
 

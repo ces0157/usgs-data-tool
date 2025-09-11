@@ -2,6 +2,8 @@
 This USGS Data Tool is used to download national datasets through their API. Currently, only DEM (Digital Elevation Maps) and LiDAR dataset downloads are supported within this repository, but I am open to merge requests and colloboration to get further datasets and specifications in! More possibe options can be found on the USGS TNM API [documenation](https://tnmaccess.nationalmap.gov/api/v1/docs)
 
 # Setup
+The only prerequisite to installing is ensuring conda is installed (Note that this has only been texted on linux).
+
 To install this repository, just clone and run:
 `./install.sh`
 
