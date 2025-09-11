@@ -5,6 +5,7 @@ import os
 import glob
 
 
+
 def convert_tiff(input_dir: str, file: str, new_file_type: str):
     """
     Convert GeoTIFF files into either a RAW or PNG 
@@ -15,35 +16,36 @@ def convert_tiff(input_dir: str, file: str, new_file_type: str):
         new_file_type: new file type to be saved (png or raw)
         
     """
-    
     filename = os.path.basename(file)
     filename = filename.replace(".tif", "")
 
-    
-    # Read GEO-TIFF
-    ds = gdal.Open(file)
-    band = ds.GetRasterBand(1)
-    array = band.ReadAsArray().astype(np.float32)
+    src_ds = gdal.Open(file)
 
-    #Normalize TO 0-65535
-    min_val = np.nanmin(array)
-    max_val = np.nanmax(array)
+    band = src_ds.GetRasterBand(1)
+    min_val, max_val = band.ComputeRasterMinMax(True)
 
-    # Avoid divide-by-zero
-    if max_val == min_val:
-        norm_array = np.zeros_like(array, dtype=np.uint16)
-    else:
-        norm_array = ((array - min_val) / (max_val - min_val) * 65535).astype(np.uint16)
-
-    if new_file_type == "raw":
-        output_raw = input_dir + "/" + filename + ".raw"
-        with open(output_raw, "wb") as f:
-            norm_array.byteswap(False).tofile(f)
-
-    elif new_file_type == "png":
+    if new_file_type == "png":
         output_png = input_dir + "/" + filename + ".png"
-        img = Image.fromarray(norm_array, mode="I;16")
-        img.save(output_png)
+        #conver to png
+        gdal.Translate(
+            output_png,
+            src_ds,
+            format="PNG",        # Equivalent to -of PNG
+            outputType=gdal.GDT_Byte,  # Equivalent to -ot Byte
+            scaleParams=[[min_val, max_val, 0, 255]]       # Equivalent to -scale (auto-scale min/max to 0–255)
+        )
     
-    #remove the original tiff file
+    elif new_file_type == "raw":
+        output_raw = input_dir + "/" + filename + ".raw"
+        gdal.Translate(
+            output_raw,
+            src_ds,
+            format="ENVI",             # RAW-like format with .hdr file
+            outputType=gdal.GDT_UInt16,
+            scaleParams=[]             # Auto-scale min->0, max->65535
+        )
+
+    
     os.remove(file)
+
+   

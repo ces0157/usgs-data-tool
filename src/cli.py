@@ -48,7 +48,7 @@ def main():
         type=str,
         choices = ["tiff", "png", "raw"],
         default = "tiff",
-        help="File type to save the Digital Elevation Maps"
+        help="File type to save the Digital Elevation Maps (Note changing to png or raw will reduce precision)"
     )
 
     parser.add_argument(

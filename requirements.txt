@@ -4,3 +4,4 @@ tqdm
 pdal
 pytz
 numpy
+pillow
