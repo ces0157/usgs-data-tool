@@ -52,8 +52,6 @@ def merge_lidar(folders: list[str], keep_files: bool):
             for filename in os.listdir(input_dir):
                 file_path = os.path.join(input_dir, filename)
 
-                print(filename)
-                print(output_file)
                 # Delete only if it's a file and not the one to keep
                 if os.path.isfile(file_path) and file_path != output_file:
                     os.remove(file_path)

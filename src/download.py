@@ -18,8 +18,6 @@ def download_data(args, download_information: dict, output_dir:str):
     project_dirs = set()
     print(f"Downloading {len(download_information)} {args.type} datasets")
     for i in tqdm(range(0, len(download_information))):
-        if i == 10:
-            break
         #get the name of the project we are downloading from
         url = download_information[i]["url"]
 
@@ -30,7 +28,10 @@ def download_data(args, download_information: dict, output_dir:str):
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
-        r = requests.get(url, stream=True, timeout=20)
+        
+        print(url)
+        #TODO: REMOVE verify is False and set up handeling
+        r = requests.get(url, stream=True, timeout=20, verify=False)
         r.raise_for_status()   # raise if HTTP error (404, 500, etc.)
 
         with open(filename, "wb") as f:

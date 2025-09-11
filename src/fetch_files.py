@@ -4,6 +4,8 @@ import json
 
 BASE_URL = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
+
+#TODO: MAKE General fucntion for API
 def fetch_lidar_data(bbox: tuple, type:str, usgs_data:dict) -> list[dict]:
     """
     Query The National Map (TNM) API for given lidar dataset
@@ -41,9 +43,6 @@ def fetch_dem_data(bbox: tuple, type: str, spec: str, usgs_data:dict) -> list[di
     """
     dataset_name = usgs_data[type][spec]["usgs_name"]
     dataset_format = usgs_data[type][spec]["usgs_data_format"]
-
-    print(dataset_name)
-    print(dataset_format)
 
     return fetch_data(dataset_name, dataset_format, bbox)
 
