@@ -2,7 +2,7 @@ import os
 import pytest
 import sys
 from unittest.mock import patch, call
-from dem.dem_tools import merge_dem  # replace 'your_module' with actual module name
+from dem.dem_tools import merge_dem, convert_tiff  # replace 'your_module' with actual module name
 from osgeo import gdal, osr
 
 
@@ -78,3 +78,33 @@ def test_merge_dem_keep_files_false(sample_files):
                 assert "merged.tif" in os.listdir(folder)
             else:
                 assert "merged.tif" not in os.listdir(folder)
+
+
+
+@pytest.mark.parametrize("new_file_type,precision,expected_ext", [
+    ("png", None, ".png"),
+    ("png", 16, ".png"),
+    ("raw", None, ".r16"),
+])
+def test_convert_tiff_creates_expected_amount(sample_files, new_file_type, precision, expected_ext):
+    count = 0
+    for folder, files in sample_files.items():
+        for i, tif in enumerate(files, start=1):
+            convert_tiff(
+                input_dir=folder,
+                file=tif,
+                new_file_type=new_file_type,
+                index=i,
+                precision=precision
+            )
+            count += 1
+
+    # Assert: number of converted files equals number of inputs
+    for folder, files in sample_files.items():
+        converted = [f for f in os.listdir(folder) if f.endswith(expected_ext)]
+        assert len(converted) == len(files)
+
+    # Also ensure original .tif files are gone
+    for files in sample_files.values():
+        for tif in files:
+            assert not os.path.exists(tif)
