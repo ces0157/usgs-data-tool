@@ -64,8 +64,6 @@ def test_merge_dem_keep_files_true(sample_files):
             assert "merged.tif" not in os.listdir(folder)
 
     
-
-
 def test_merge_dem_keep_files_false(sample_files):
         before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
         merge_dem(sample_files, keep_files=False)

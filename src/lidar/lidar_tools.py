@@ -3,26 +3,28 @@ import glob
 import pdal
 import os
 
-def merge_lidar(folders: list[str], keep_files: bool):
+def merge_lidar(files: dict , keep_files: bool):
  
     """
     Merge files in lidar pointcloud and save to a new file
 
     Args:
-        folders: list of all the project folders (one merge per each folder)
+        dictonary where the keys are folders and the filenames are the value
         keep_files: weather to keep the original files afterwards
         
     """
-    for input_dir in folders:
-        print(f"Merging laz files in {input_dir} ")
-        output_file = input_dir + "/merged.laz"
+    for key in files:
+        print(f"Merging laz files in {key} ")
+        output_file = key + "/merged.laz"
         
-        lidar_dir = input_dir + "/*.laz"
-        files = glob.glob(lidar_dir)
-        if not files:
-            raise FileNotFoundError(f"No .laz files found in {lidar_dir}")
+        #lidar_dir = input_dir + "/*.laz"
+        #files = glob.glob(lidar_dir)
+        # if not files:
+        #     raise FileNotFoundError(f"No .laz files found in {lidar_dir}")
         
-        readers = [{"type": "readers.las", "filename": f} for f in files]
+        laz_files = files[key]
+        
+        readers = [{"type": "readers.las", "filename": f} for f in laz_files]
 
         pipeline_dict = {
             "pipeline": readers + [
@@ -41,13 +43,13 @@ def merge_lidar(folders: list[str], keep_files: bool):
         pipeline = pdal.Pipeline(pipeline_json)
         count = pipeline.execute()
 
-        print(f"Merged {len(files)} files into {output_file}")
+        print(f"Merged {len(laz_files)} files into {output_file}")
         print(f"Total points written: {count}")
 
         if not keep_files:
             print("Removing files")
-            for filename in os.listdir(input_dir):
-                file_path = os.path.join(input_dir, filename)
+            for filename in os.listdir(key):
+                file_path = os.path.join(key, filename)
 
                 # Delete only if it's a file and not the one to keep
                 if os.path.isfile(file_path) and file_path != output_file:

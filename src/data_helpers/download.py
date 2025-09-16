@@ -59,9 +59,9 @@ def download_data(args, download_information: dict, output_dir:str):
     
     if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
         if args.merge_lidar == "merge-keep":
-            merge_lidar(list(project_dirs.keys()), True)
+            merge_lidar(project_dirs, True)
         else:
-            merge_lidar(list(project_dirs.keys()), False)
+            merge_lidar(project_dirs, False)
 
     
 
