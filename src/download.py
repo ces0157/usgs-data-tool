@@ -40,7 +40,7 @@ def download_data(args, download_information: dict, output_dir:str):
 
         if args.type == "dem" and (args.dem_output != "tiff"):
             print("Converting file ...")
-            convert_tiff(project_dir, filename, args.dem_output)
+            convert_tiff(project_dir, filename, args.dem_output, i, args.png_precision)
 
     
     if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):

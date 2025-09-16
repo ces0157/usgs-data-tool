@@ -52,6 +52,22 @@ def main():
     )
 
     parser.add_argument(
+        "--png-precision",
+        type=int,
+        choices=[8, 16],
+        default = 16,
+        help = "If PNG is selected, change the precision type."
+    )
+
+    # parser.add_argument(
+    #     "--dem-scale",
+    #     type=str,
+    #     choices = ["none", "auto", "1009", "2017", "4033", "8129", "8129"],
+    #     default="auto",
+    #     help="Scale the raw and or png files resolution to be combatible with UE terrain import. Only scales if dem-output is changed to png or raw"
+    # )
+
+    parser.add_argument(
         "--merge-lidar",
         type=str,
         choices = ["no-merge", "merge-keep", "merge-delete"],
@@ -59,6 +75,7 @@ def main():
         help="For each project that gets downloaded merge or don't merge the .laz/.las files into a single pointcloud."
         "merge-keep keeps all original las/laz files. merge-delete removes all original files and only keeps the merged output "
     )
+
 
 
     args = parser.parse_args()
