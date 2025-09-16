@@ -74,6 +74,10 @@ def merge_dem(files: dict, keep_files: bool):
     keep_files: Weather to keep the original files afterwards
     """
     for key in files:
+        if len(files[key]) == 1:
+            print("Only 1 file recongized ... no merging required")
+            continue
+        
         output_file = key + "/" + "merged.tif"
         gdal.Warp(
             destNameOrDestDS=output_file,
