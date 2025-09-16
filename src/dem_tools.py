@@ -64,10 +64,30 @@ def convert_tiff(input_dir: str, file: str, new_file_type: str, index: int, prec
 
     os.remove(file)
 
+
+def merge_dem(files: dict, keep_files: bool):
+    """
+    Merge DEM files together into a single GeoTIFF file
+
+    Args:
+    files: dictonary where the keys are folders and the filenames are the value
+    keep_files: Weather to keep the original files afterwards
+    """
+    for key in files:
+        output_file = key + "/" + "merged.tif"
+        gdal.Warp(
+            destNameOrDestDS=output_file,
+            srcDSOrSrcDSTab=files[key],
+            format="GTiff",
+            creationOptions=["COMPRESS=LZW"],
+        )
+
+        if not keep_files:
+            for file in files[key]:
+                os.remove(file)
+
     
     
-
-
 #TODO add resolution check back in
 # def check_resolution(src_ds, resolution: str):
 #     """

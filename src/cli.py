@@ -53,11 +53,29 @@ def main():
 
     parser.add_argument(
         "--png-precision",
-        type=int,
-        choices=[8, 16],
+        type =int,
+        choices =[8, 16],
         default = 16,
         help = "If PNG is selected, change the precision type."
     )
+
+    parser.add_argument(
+        "--dem-merge",
+        type = str,
+        choices = ["no-merge", "merge-keep", "merge-delete"],
+        default = "merge-keep",
+        help = "For each project that gets downloaded merge or don't merge the GeoTIFF files into a single file"
+        "merge-keep keeps all original .tiff/PNG/.r16 files. merge-delete removes all original files and only keeps the merged output"
+    )
+
+    # parser.add_argument(
+    #     "dem-merge-method",
+    #     type = str,
+    #     choices = ["project", "everything"],
+    #     default = "everything",
+    #     help="Merge DEM Files accross projects or only merge DEM files within projects. Note: FILES FROM differet years may overlap or have differing structures"
+    # )
+
 
     # parser.add_argument(
     #     "--dem-scale",
@@ -69,10 +87,10 @@ def main():
 
     parser.add_argument(
         "--merge-lidar",
-        type=str,
+        type =str,
         choices = ["no-merge", "merge-keep", "merge-delete"],
         default = "merge-keep",
-        help="For each project that gets downloaded merge or don't merge the .laz/.las files into a single pointcloud."
+        help = "For each project that gets downloaded merge or don't merge the .laz/.las files into a single pointcloud."
         "merge-keep keeps all original las/laz files. merge-delete removes all original files and only keeps the merged output "
     )
 

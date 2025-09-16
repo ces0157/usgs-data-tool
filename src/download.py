@@ -2,7 +2,7 @@ import os
 import requests
 from tqdm import tqdm
 from lidar_tools import merge_lidar
-from dem_tools import convert_tiff
+from dem_tools import convert_tiff, merge_dem
 
 def download_data(args, download_information: dict, output_dir:str):
     """
@@ -16,7 +16,8 @@ def download_data(args, download_information: dict, output_dir:str):
     Returns:
         list of dicts containing dataset info and download URLs.
     """
-    project_dirs = set()
+    #dictonary containing project_dirs and associated files
+    project_dirs = {}
     print(f"Downloading {len(download_information)} {args.type} datasets")
     for i in tqdm(range(0, len(download_information))):
         #get the name of the project we are downloading from
@@ -25,10 +26,17 @@ def download_data(args, download_information: dict, output_dir:str):
         project_name = url.split("Projects/")[1].split("/")[0]
         project_dir = output_dir + "/" + args.type + "/" + project_name
 
-        project_dirs.add(project_dir)
+        #project_dirs.add(project_dir)
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
+        print(filename)
+
+        if project_dir in project_dirs:
+            project_dirs[project_dir].append(filename)
+        else:
+            project_dirs[project_dir] = [filename]
+
         
         #TODO: REMOVE verify is False and set up handeling
         r = requests.get(url, stream=True, timeout=20, verify=False)
@@ -42,12 +50,18 @@ def download_data(args, download_information: dict, output_dir:str):
             print("Converting file ...")
             convert_tiff(project_dir, filename, args.dem_output, i, args.png_precision)
 
+    if args.type == "dem" and (args.dem_merge == "merge-keep" or args.dem_merge == "merge-delete"):
+        if args.dem_merge == "merge-keep":
+            merge_dem(project_dirs, True)
+        else:
+            merge_dem(project_dirs, False)
+        
     
     if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
         if args.merge_lidar == "merge-keep":
-            merge_lidar(project_dirs, True)
+            merge_lidar(list(project_dirs.keys()), True)
         else:
-            merge_lidar(project_dirs, False)
+            merge_lidar(list(project_dirs.keys()), False)
 
     
 
