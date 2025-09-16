@@ -1,8 +1,8 @@
 import os
 import requests
 from tqdm import tqdm
-from lidar_tools import merge_lidar
-from dem_tools import convert_tiff, merge_dem
+from lidar.lidar_tools import merge_lidar
+from dem.dem_tools import convert_tiff, merge_dem
 
 def download_data(args, download_information: dict, output_dir:str):
     """

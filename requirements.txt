@@ -5,3 +5,8 @@ pdal
 pytz
 numpy
 pillow
+pytest
+pyyaml
+lark
+Jinja2
+importlib-metadata

@@ -43,6 +43,7 @@ conda install -y -c conda-forge gdal
 if [ -f "$PROJECT_ROOT/requirements.txt" ]; then
     echo "Installing requirements..."
     pip install -r "$PROJECT_ROOT/requirements.txt"
+    pip install -e .
 else
     echo "No requirements.txt found!"
     exit 1

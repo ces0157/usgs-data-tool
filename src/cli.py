@@ -2,8 +2,8 @@
 import argparse
 import os
 import json
-from fetch_files import fetch_lidar_data, fetch_dem_data
-from download import download_data
+from data_helpers.fetch_files import fetch_lidar_data, fetch_dem_data
+from data_helpers.download import download_data
 
 
 def main():
