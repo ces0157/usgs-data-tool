@@ -2,7 +2,8 @@
 import argparse
 import os
 import json
-from data_helpers.fetch_files import fetch_lidar_data, fetch_dem_data
+# from data_helpers.fetch_files import fetch_lidar_data, fetch_dem_data
+from data_helpers.fetch_files import fetch_data_list
 from data_helpers.download import download_data
 
 
@@ -116,14 +117,16 @@ def main():
 
 
     bbox = tuple(args.aoi)
-    if args.type == "lidar":
-        download_info = fetch_lidar_data(bbox, args.type, usgs_data)
-    elif args.type == "dem":
-        download_info = fetch_dem_data(bbox, args.type, args.dem_spec, usgs_data)
+    if args.type == "dem":
+        download_info = fetch_data_list(bbox, args.type, usgs_data, args.dem_spec)
+    else:
+        download_info = fetch_data_list(bbox, args.type, usgs_data)
 
     print(f"Found {len(download_info)} files within the region of interest")
-    print(args.dem_output)
-    download_data(args, download_info, output_dir)
+
+    if(len(download_info) != 0):
+        download_data(args, download_info, output_dir)
+    
 
 
 

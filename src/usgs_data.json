@@ -1,7 +1,9 @@
 {
   "lidar": {
-    "usgs_name": "Lidar Point Cloud (LPC)",
-    "usgs_data_format": "LAS,LAZ"
+    "regular": {
+      "usgs_name": "Lidar Point Cloud (LPC)",
+      "usgs_data_format": "LAS,LAZ"
+    }
   },
   "dem": {
     "regular": {

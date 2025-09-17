@@ -5,56 +5,36 @@ import json
 BASE_URL = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
 
-#TODO: MAKE General fucntion for API
-def fetch_lidar_data(bbox: tuple, type:str, usgs_data:dict) -> list[dict]:
+def fetch_data_list(bbox: tuple, type: str, usgs_data:dict, spec:str = "regular") -> list[dict]:
     """
-    Query The National Map (TNM) API for given lidar dataset
-
-    Args:
-        bbox (tuple): (minLon, minLat, maxLon, maxLat) in WGS84 (lon/lat).
-        type (str): (lidar, dem) datatype
-        usgs_Data (Dict): json configuration holding names and format tpes 
-        
-
-    Returns:
-        list of dicts containing dataset info and download URLs.
-    """
-    
-    dataset_name = usgs_data[type]["usgs_name"]
-    dataset_format = usgs_data[type]["usgs_data_format"]
-
-    return fetch_data(dataset_name, dataset_format, bbox)
-
-
-def fetch_dem_data(bbox: tuple, type: str, spec: str, usgs_data:dict) -> list[dict]:
-    """
-    Query The National Map (TNM) API for given DEM dataset
+    Extract dataset type and spec and pass to the dataset types and function
 
     Args:
         bbox: (minLon, minLat, maxLon, maxLat) in WGS84 (lon/lat).
         type: (lidar, dem) datatype
-        spec: this type has dataset may have different types (seamsless versus regular).
-        Refer to USGS documenation
-        usgs_Data: json configuration holding names and format tpes 
+        usgs_Data: json configuration holding names, specs, and format types
+        specs: specialization of datast we are dealing with 
         
-
     Returns:
         list of dicts containing dataset info and download URLs.
     """
+    
+    
     dataset_name = usgs_data[type][spec]["usgs_name"]
     dataset_format = usgs_data[type][spec]["usgs_data_format"]
+    
+    return fetch_datasets(dataset_name, dataset_format, bbox)
 
-    return fetch_data(dataset_name, dataset_format, bbox)
 
 
-def fetch_data(dataset_name: str, dataset_format: str, bbox: dict) -> list[dict]:
+def fetch_datasets(dataset_name: str, dataset_format: str, bbox: tuple) -> list[dict]:
     """
     Query The National Map (TNM) API for given name, format, and bounding box
 
     Args:
         dataset_name: name of the datset to be downloaded (i.e is it a Lidar, DEM, etc.)
         dataset_format: format of the dataset to be downloaded
-        usgs_Data: json configuration holding names and format tpes 
+        bbox: (minLon, minLat, maxLon, maxLat) in WGS84 (lon/lat).
         
 
     Returns:
