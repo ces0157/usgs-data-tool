@@ -11,27 +11,21 @@ import shutil
 #TODO add this back in
 #VALID_RESOLUTIONS = {1009, 2017, 4033, 8129}  # UE-supported sizes (power of 2 + 1)
 
-def convert_tiff(input_dir: str, file: str, new_file_type: str, output_file: str, precision=None):
+def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None):
     """
     Convert GeoTIFF files into either a RAW (r16) or PNG 
 
     Args:
-        input_dir: directory we are saving too
         file: file to be replaced
         new_file_type: new file type to be saved (png or raw)
         output_filename: name of the new filename to save
         precision: precision in which to save a png file. RAW files will always default to 16
     """
-    
-    #filename = "heightmap" + str(index)
 
     src_ds = gdal.Open(file)
 
     band = src_ds.GetRasterBand(1)
     min_val, max_val = band.ComputeRasterMinMax(True)
-
-
-    #src_ds = check_resolution(src_ds, resolution)
         
     
     if new_file_type == "png":
@@ -43,7 +37,6 @@ def convert_tiff(input_dir: str, file: str, new_file_type: str, output_file: str
             output_precision = gdal.GDT_Byte
             max_normalization = 255
 
-        #output_png = input_dir + "/" + output_filename + ".png"
         #convert to png
         gdal.Translate(
             output_file,
@@ -64,8 +57,6 @@ def convert_tiff(input_dir: str, file: str, new_file_type: str, output_file: str
             scaleParams=[[min_val, max_val, 0, 65535]],
         )
 
-
-#TODO REFACTOR redudant code
 def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None):
     """
     Merge DEM files together into a single GeoTIFF file
@@ -84,19 +75,8 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                 continue
             
             #create an output GTIFF
-            output_file_tif = key + "/merged.tif"
-            gdal.Warp(
-                destNameOrDestDS=output_file_tif,
-                srcDSOrSrcDSTab=files[key],
-                format="GTiff"
-            )
+            merge(key, files[key], file_type, precision)
 
-            #convert the output to png or raw16
-            if file_type != "tif":
-                output_file = key + "/" + "merged." + file_type 
-                convert_tiff(key, output_file_tif, file_type, output_file, precision)
-
-        
         #we just need to merge the merged tiff files into a singular file
         if merge_method == "both":
             merged_files = []
@@ -109,45 +89,44 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                 
                 #get the output directory for digital elevation maps 
                 output_dir = key.rsplit("/", 1)[0]
-            
-            output_file_tif = output_dir + "/" + "merged.tif"
-            gdal.Warp(
-                destNameOrDestDS=output_file_tif,
-                srcDSOrSrcDSTab=merged_files,
-                format="GTiff"
-            )
-
-            if file_type != "tif":
-                output_file = output_dir + "/" + "merged." + file_type 
-                convert_tiff(key, output_file_tif, file_type, output_file, precision)
-
-
-        #remove all files that are not merged files
-        if not keep_files:
-            remove_files(files, file_type, merge_method)
-            
+            merge(output_dir, merged_files, file_type, precision)
+     
     elif merge_method == "all":
         all_files = []
         for key in files:
             all_files = all_files + files[key]
-            
             #get the output directory for digital elevation maps 
             output_dir = key.rsplit("/", 1)[0]
         
-        output_file_tif = output_dir + "/" + "merged.tif"
-        gdal.Warp(
-            destNameOrDestDS=output_file_tif,
-            srcDSOrSrcDSTab=all_files,
-            format="GTiff"
-        )
+        merge(output_dir, all_files, file_type, precision)    
+   
+    #remove all files that are not merged files
+    if not keep_files:
+        remove_files(files, file_type, merge_method)
 
-        if file_type != "tif":
-            output_file = output_dir + "/" + "merged." + file_type 
-            convert_tiff(key, output_file_tif, file_type, output_file, precision)
-            
-        #remove all files that are not merged files
-        if not keep_files:
-            remove_files(files, file_type, merge_method)
+
+def merge(output_dir: str, files, file_type: str, precision: None):
+    """
+    Args:
+
+    Does the actual merging and conversion if nesseccary
+
+    output_dir: where we are saving too
+    files: all the files that we are going to merge
+    file_type: how to save the merged output (tif, png, raw)
+    precision: the precision that we save too 
+    """
+
+    output_file_tif = output_dir + "/" + "merged.tif"
+    gdal.Warp(
+        destNameOrDestDS=output_file_tif,
+        srcDSOrSrcDSTab=files,
+        format="GTiff"
+    )
+
+    if file_type != "tif":
+        output_file = output_dir + "/" + "merged." + file_type 
+        convert_tiff(output_file_tif, file_type, output_file, precision)
 
 
 #TODO REFACTOR REDUDANT CODE

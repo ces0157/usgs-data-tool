@@ -468,7 +468,6 @@ def test_convert_tiff_creates_expected_amount(sample_files, new_file_type, preci
             #print(tif)
             output_file = folder + "/test" + str(i) + "." + new_file_type
             convert_tiff(
-                input_dir=folder,
                 file=tif,
                 new_file_type=new_file_type,
                 output_file= output_file,

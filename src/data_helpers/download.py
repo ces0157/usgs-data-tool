@@ -48,7 +48,7 @@ def download_data(args, download_information: dict, output_dir:str):
         if args.type == "dem" and (args.dem_output != "tif"):
             print("Converting file ...")
             output_filename = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "." + args.dem_output
-            convert_tiff(project_dir, filename, args.dem_output, output_filename, args.png_precision)
+            convert_tiff(filename, args.dem_output, output_filename, args.png_precision)
 
     
     #merging files related to DEM files
