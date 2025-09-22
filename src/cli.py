@@ -47,8 +47,8 @@ def main():
     parser.add_argument(
         "--dem-output",
         type=str,
-        choices = ["tiff", "png", "raw"],
-        default = "tiff",
+        choices = ["tif", "png", "r16"],
+        default = "tif",
         help="File type to save the Digital Elevation Maps (Note changing to png or raw will reduce precision)"
     )
 
@@ -66,8 +66,15 @@ def main():
         choices = ["no-merge", "merge-keep", "merge-delete"],
         default = "merge-keep",
         help = "For each project that gets downloaded merge or don't merge the GeoTIFF files into a single file"
-        "merge-keep keeps all original .tiff/PNG/.r16 files. merge-delete removes all original files and only keeps the merged output"
+        "merge-keep keeps all original .tif/PNG/.r16 files. merge-delete removes all original files and only keeps the merged output"
     )
+
+    # parser.add_argument(
+    #     '--dem-filter', 
+    #     action='store_true', 
+    #     help='For each GeoTiff that gets downloaded ' \
+    #     'crop/filter down the Tiff to only the AOI being used. Some datasets may intersect with the AOI' \
+    #         'but are not a part of it')
 
     # parser.add_argument(
     #     "dem-merge-method",
@@ -98,6 +105,7 @@ def main():
 
 
     args = parser.parse_args()
+
     
     #used to help ensure easy string additions later on in the code
     if args.output_dir[-1] == "/":

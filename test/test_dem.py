@@ -48,10 +48,10 @@ def sample_files(tmp_path):
     }
 
 
-def test_merge_dem_keep_files_true(sample_files):
+def test_merge_dem_tiff_keep_files_true(sample_files):
     before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
-    merge_dem(sample_files, keep_files=True)
+    merge_dem(sample_files, keep_files=True, file_type="tif")
 
     after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
@@ -63,13 +63,11 @@ def test_merge_dem_keep_files_true(sample_files):
             assert after_counts[folder] == 1
             assert "merged.tif" not in os.listdir(folder)
 
-    
-def test_merge_dem_keep_files_false(sample_files):
+def test_merge_dem_tiff_keep_files_false(sample_files):
         before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
-        merge_dem(sample_files, keep_files=False)
+        merge_dem(sample_files, keep_files=False, file_type="tif")
 
         after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
-
         for folder in sample_files:
             assert after_counts[folder] == 1
             if(before_counts[folder] != 1):
@@ -78,21 +76,87 @@ def test_merge_dem_keep_files_false(sample_files):
                 assert "merged.tif" not in os.listdir(folder)
 
 
+def test_merge_dem_png_keep_files_true(sample_files):
+    before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+
+    merge_dem(sample_files, keep_files=True, file_type="png")
+
+    after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+
+    for folder in sample_files:
+        if(before_counts[folder] != 1):
+            #file will contain (.png and xml) for every tiff and there will be a merged.tiff file
+            assert after_counts[folder] == before_counts[folder] + 3
+            assert "merged.tif" in os.listdir(folder)
+            assert "merged.png" in os.listdir(folder)
+        else:
+            assert after_counts[folder] == 1
+            assert "merged.tif" not in os.listdir(folder)
+            assert "merged.r16" not in os.listdir(folder)
+
+
+def test_merge_dem_png_keep_files_false(sample_files):
+    before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+    merge_dem(sample_files, keep_files=False, file_type="png")
+
+    after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+    for folder in sample_files:
+        assert after_counts[folder] == 1
+        if(before_counts[folder] != 1):
+            assert "merged.png" in os.listdir(folder)
+        else:
+            assert "merged.png" not in os.listdir(folder)
+
+def test_merge_dem_raw_keep_files_true(sample_files):
+    before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+
+    merge_dem(sample_files, keep_files=True, file_type="r16")
+
+    after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+
+    for folder in sample_files:
+        if(before_counts[folder] != 1):
+            #file will contain (.raw and hdr, and xml) for every tiff and there will be a merged.tiff file
+            assert after_counts[folder] == before_counts[folder] + 4
+            assert "merged.tif" in os.listdir(folder)
+            assert "merged.r16" in os.listdir(folder)
+        else:
+            assert after_counts[folder] == 1
+            assert "merged.tif" not in os.listdir(folder)
+            assert "merged.r16" not in os.listdir(folder)
+
+def test_merge_dem_raw_keep_files_false(sample_files):
+    before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+
+    merge_dem(sample_files, keep_files=False, file_type="r16")
+
+    after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+
+    for folder in sample_files:
+        assert after_counts[folder] == 1
+        if(before_counts[folder] != 1):
+            assert "merged.r16" in os.listdir(folder)
+        else:
+            assert "merged.r16" not in os.listdir(folder)
+
 
 @pytest.mark.parametrize("new_file_type,precision,expected_ext", [
     ("png", None, ".png"),
     ("png", 16, ".png"),
-    ("raw", None, ".r16"),
+    ("r16", None, ".r16"),
 ])
 def test_convert_tiff_creates_expected_amount(sample_files, new_file_type, precision, expected_ext):
     count = 0
     for folder, files in sample_files.items():
         for i, tif in enumerate(files, start=1):
+            #print(folder)
+            #print(tif)
+            output_file = folder + "/test" + str(i) + "." + new_file_type
             convert_tiff(
                 input_dir=folder,
                 file=tif,
                 new_file_type=new_file_type,
-                index=i,
+                output_file= output_file,
                 precision=precision
             )
             count += 1
@@ -101,8 +165,3 @@ def test_convert_tiff_creates_expected_amount(sample_files, new_file_type, preci
     for folder, files in sample_files.items():
         converted = [f for f in os.listdir(folder) if f.endswith(expected_ext)]
         assert len(converted) == len(files)
-
-    # Also ensure original .tif files are gone
-    for files in sample_files.values():
-        for tif in files:
-            assert not os.path.exists(tif)

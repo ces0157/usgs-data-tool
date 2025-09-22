@@ -26,11 +26,10 @@ def download_data(args, download_information: dict, output_dir:str):
         project_name = url.split("Projects/")[1].split("/")[0]
         project_dir = output_dir + "/" + args.type + "/" + project_name
 
-        #project_dirs.add(project_dir)
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
-        print(filename)
+        
 
         if project_dir in project_dirs:
             project_dirs[project_dir].append(filename)
@@ -46,17 +45,20 @@ def download_data(args, download_information: dict, output_dir:str):
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        if args.type == "dem" and (args.dem_output != "tiff"):
+        if args.type == "dem" and (args.dem_output != "tif"):
             print("Converting file ...")
-            convert_tiff(project_dir, filename, args.dem_output, i, args.png_precision)
+            output_filename = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "." + args.dem_output
+            convert_tiff(project_dir, filename, args.dem_output, output_filename, args.png_precision)
 
+    
+    #merging files related to DEM files
     if args.type == "dem" and (args.dem_merge == "merge-keep" or args.dem_merge == "merge-delete"):
         if args.dem_merge == "merge-keep":
-            merge_dem(project_dirs, True)
+            merge_dem(project_dirs, True, args.dem_output, args.png_precision)
         else:
-            merge_dem(project_dirs, False)
+            merge_dem(project_dirs, False, args.dem_output, args.png_precision)
         
-    
+    #merging files related to lidar
     if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
         if args.merge_lidar == "merge-keep":
             merge_lidar(project_dirs, True)
