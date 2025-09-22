@@ -26,7 +26,7 @@ def fetch_data_list(bbox: tuple, type: str, usgs_data:dict, spec:str = "regular"
     return fetch_datasets(dataset_name, dataset_format, bbox)
 
 
-
+#TODO ADD SUPORT FOR POLYGON
 def fetch_datasets(dataset_name: str, dataset_format: str, bbox: tuple) -> list[dict]:
     """
     Query The National Map (TNM) API for given name, format, and bounding box
@@ -41,8 +41,7 @@ def fetch_datasets(dataset_name: str, dataset_format: str, bbox: tuple) -> list[
         list of dicts containing dataset info and download URLs.
     """
 
-    print(dataset_name)
-    print(dataset_format)
+    
     print(",".join(map(str, bbox)))
     params = {
         "datasets": dataset_name,
@@ -55,11 +54,9 @@ def fetch_datasets(dataset_name: str, dataset_format: str, bbox: tuple) -> list[
     if response.status_code != 200:
         print("Error:", response.status_code, response.text)
         return []
-
-    print(response)
-    print(response.status_code)
+    
+    print(response.text)
     data = response.json()
-    print(data)
 
     results = []
 

@@ -77,12 +77,12 @@ def main():
         help="Merge DEM Files accross projects or only merge DEM files within projects. Note: FILES FROM differet years may overlap or have differing structures"
     )
 
-    # parser.add_argument(
-    #     '--dem-filter', 
-    #     action='store_true', 
-    #     help='For each GeoTiff that gets downloaded ' \
-    #     'crop/filter down the Tiff to only the AOI being used. Some datasets may intersect with the AOI' \
-    #         'but are not a part of it')
+    parser.add_argument(
+        '--dem-filter', 
+        action='store_true', 
+        help='For each GeoTiff that gets downloaded ' \
+        'crop/filter down the Tiff to only the AOI being used. Some datasets may intersect with the AOI' \
+            'but are not a part of it. NOTE: This is only supported with Merged files (Single file support coming soon)')
 
     # parser.add_argument(
     #     "--dem-scale",
@@ -104,6 +104,11 @@ def main():
 
 
     args = parser.parse_args()
+    
+    if (args.dem_filter):
+        print("we want to crop")
+    else:
+        print("no crop")
 
     
     #used to help ensure easy string additions later on in the code

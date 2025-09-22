@@ -57,7 +57,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
             scaleParams=[[min_val, max_val, 0, 65535]],
         )
 
-def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None):
+def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None, filter = False, bbox=None):
     """
     Merge DEM files together into a single GeoTIFF file
 
@@ -75,6 +75,7 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                 continue
             
             #create an output GTIFF
+            #TODO: TEST filter for just project
             merge(key, files[key], file_type, precision)
 
         #we just need to merge the merged tiff files into a singular file
@@ -89,6 +90,7 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                 
                 #get the output directory for digital elevation maps 
                 output_dir = key.rsplit("/", 1)[0]
+            #TODO: TEST filter for both
             merge(output_dir, merged_files, file_type, precision)
      
     elif merge_method == "all":
@@ -98,14 +100,14 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             #get the output directory for digital elevation maps 
             output_dir = key.rsplit("/", 1)[0]
         
-        merge(output_dir, all_files, file_type, precision)    
+        merge(output_dir, all_files, file_type, precision, filter, bbox)    
    
     #remove all files that are not merged files
     if not keep_files:
         remove_files(files, file_type, merge_method)
 
 
-def merge(output_dir: str, files, file_type: str, precision: None):
+def merge(output_dir: str, files, file_type: str, precision=None, filter = False, bbox=None):
     """
     Args:
 
@@ -115,18 +117,32 @@ def merge(output_dir: str, files, file_type: str, precision: None):
     files: all the files that we are going to merge
     file_type: how to save the merged output (tif, png, raw)
     precision: the precision that we save too 
+    filter: crop the DEM to specified area
+    bbox: the area of interest to filter too
     """
 
-    output_file_tif = output_dir + "/" + "merged.tif"
+    output_file_tif = output_dir + "/merged.tif"
     gdal.Warp(
         destNameOrDestDS=output_file_tif,
         srcDSOrSrcDSTab=files,
-        format="GTiff"
+        format="GTiff",
+        dstSRS="EPSG:4326"
     )
+
+    if filter:
+        tmp_file = output_dir + "/filtered.tif"
+        gdal.Translate(
+            tmp_file,
+            output_file_tif,
+            projWin=(bbox[0], bbox[3], bbox[2], bbox[1]) # minX, maxY, maxX, minY
+        )
+
+        os.replace(tmp_file, output_file_tif)
 
     if file_type != "tif":
         output_file = output_dir + "/" + "merged." + file_type 
         convert_tiff(output_file_tif, file_type, output_file, precision)
+
 
 
 #TODO REFACTOR REDUDANT CODE
