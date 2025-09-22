@@ -5,6 +5,8 @@ import os
 import glob
 import shutil
 import subprocess
+import shutil
+
 
 #TODO add this back in
 #VALID_RESOLUTIONS = {1009, 2017, 4033, 8129}  # UE-supported sizes (power of 2 + 1)
@@ -63,48 +65,130 @@ def convert_tiff(input_dir: str, file: str, new_file_type: str, output_file: str
         )
 
 
-def merge_dem(files: dict, keep_files: bool, file_type: str, precision=None):
+#TODO REFACTOR redudant code
+def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None):
     """
     Merge DEM files together into a single GeoTIFF file
 
     Args:
     files: dictonary where the keys are folders and the filenames are the value
     keep_files: Weather to keep the original files afterwards
+    merge_method: do we merge files in just projects, across projects, or both (options)
     file_type: how to save the merged output (tif, png, raw)
     """
-    for key in files:
-        print(files[key])
-        if len(files[key]) == 1:
-            print("Only 1 file recongized ... no merging required")
-            continue
+
+    if merge_method == "project" or merge_method == "both":
+        for key in files:
+            if len(files[key]) == 1:
+                print("Only 1 file recongized ... no merging required")
+                continue
+            
+            #create an output GTIFF
+            output_file_tif = key + "/merged.tif"
+            gdal.Warp(
+                destNameOrDestDS=output_file_tif,
+                srcDSOrSrcDSTab=files[key],
+                format="GTiff"
+            )
+
+            #convert the output to png or raw16
+            if file_type != "tif":
+                output_file = key + "/" + "merged." + file_type 
+                convert_tiff(key, output_file_tif, file_type, output_file, precision)
+
         
-        #create an output GTIFF
-        output_file_tif = key + "/" + "merged.tif"
+        #we just need to merge the merged tiff files into a singular file
+        if merge_method == "both":
+            merged_files = []
+            for key in files:
+                #check that more than one file exists
+                if len(files[key]) != 1:
+                    merged_files.append(key + "/merged.tif")
+                else:
+                    merged_files.append(files[key][0])
+                
+                #get the output directory for digital elevation maps 
+                output_dir = key.rsplit("/", 1)[0]
+            
+            output_file_tif = output_dir + "/" + "merged.tif"
+            gdal.Warp(
+                destNameOrDestDS=output_file_tif,
+                srcDSOrSrcDSTab=merged_files,
+                format="GTiff"
+            )
+
+            if file_type != "tif":
+                output_file = output_dir + "/" + "merged." + file_type 
+                convert_tiff(key, output_file_tif, file_type, output_file, precision)
+
+
+        #remove all files that are not merged files
+        if not keep_files:
+            remove_files(files, file_type, merge_method)
+            
+    elif merge_method == "all":
+        all_files = []
+        for key in files:
+            all_files = all_files + files[key]
+            
+            #get the output directory for digital elevation maps 
+            output_dir = key.rsplit("/", 1)[0]
+        
+        output_file_tif = output_dir + "/" + "merged.tif"
         gdal.Warp(
             destNameOrDestDS=output_file_tif,
-            srcDSOrSrcDSTab=files[key],
+            srcDSOrSrcDSTab=all_files,
             format="GTiff"
         )
 
-        #convert the output to png or raw16
-        if file_type != "tiff":
-            output_file = key + "/" + "merged." + file_type 
+        if file_type != "tif":
+            output_file = output_dir + "/" + "merged." + file_type 
             convert_tiff(key, output_file_tif, file_type, output_file, precision)
-        
+            
         #remove all files that are not merged files
         if not keep_files:
-            folder_contents = os.listdir(key)
-            print(folder_contents)
-            for i in range(0, len(folder_contents)):
-                print(folder_contents[i])
-                    
-                #delete everything except merge files and if there was only one file to begin with
-                #then delete nothing
-                if folder_contents[i] != "merged." + file_type:
-                    print(key + "/" + folder_contents[i])
-                    os.remove(key + "/" + folder_contents[i])
-                
+            remove_files(files, file_type, merge_method)
 
+
+#TODO REFACTOR REDUDANT CODE
+def remove_files(files: str, file_type:str, merge_method: str):
+    """
+    Remove unesseccary files
+    Args:
+    files: dictonary where the keys are folders and the filenames are the value
+    file_type: how to save the merged output (tif, png, raw)
+    merge_method: do we merge files in just projects, across projects, or both (options)
+    """
+    if merge_method == "project" or merge_method == "both":
+        for key in files:
+            if len(files[key]) != 1:
+                folder_contents = os.listdir(key)
+                for i in range(0, len(folder_contents)):              
+                    if folder_contents[i] != "merged." + file_type:
+                        #print(key + "/" + folder_contents[i])
+                        os.remove(key + "/" + folder_contents[i])
+            dem_dir = key.rsplit("/", 1)[0]
+        
+        #remove top level directory contents
+        if merge_method == "both":
+            print(dem_dir)
+            folder_contents = [f for f in os.listdir(dem_dir) if os.path.isfile(os.path.join(dem_dir, f))]
+            print(folder_contents)
+            for i in range(0, len(folder_contents)):              
+                if folder_contents[i] != "merged." + file_type:
+                    os.remove(dem_dir + "/" + folder_contents[i])
+
+    elif merge_method == "all":
+        for key in files:
+            if os.path.exists(key):
+                shutil.rmtree(key)
+            dem_dir = key.rsplit("/", 1)[0]
+        
+        #remove top level direcot
+        folder_contents = os.listdir(dem_dir)
+        for i in range(0, len(folder_contents)):              
+            if folder_contents[i] != "merged." + file_type:
+                os.remove(dem_dir + "/" + folder_contents[i])
 
     
     

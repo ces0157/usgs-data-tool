@@ -48,10 +48,12 @@ def sample_files(tmp_path):
     }
 
 
-def test_merge_dem_tiff_keep_files_true(sample_files):
+#TODO: Whole testing refactor to use pytest paramterize
+#merge files within the project direcotires
+def test_merge_dem_tiff_keep_files_true_project(sample_files):
     before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
-    merge_dem(sample_files, keep_files=True, file_type="tif")
+    merge_dem(sample_files, keep_files=True, file_type="tif", merge_method="project")
 
     after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
@@ -63,11 +65,14 @@ def test_merge_dem_tiff_keep_files_true(sample_files):
             assert after_counts[folder] == 1
             assert "merged.tif" not in os.listdir(folder)
 
-def test_merge_dem_tiff_keep_files_false(sample_files):
+#delte all files within the project directory except merged (or single files)
+def test_merge_dem_tiff_keep_files_false_project(sample_files):
         before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
-        merge_dem(sample_files, keep_files=False, file_type="tif")
+        
+        merge_dem(sample_files, keep_files=False, file_type="tif", merge_method="project")
 
         after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
+        
         for folder in sample_files:
             assert after_counts[folder] == 1
             if(before_counts[folder] != 1):
@@ -76,10 +81,110 @@ def test_merge_dem_tiff_keep_files_false(sample_files):
                 assert "merged.tif" not in os.listdir(folder)
 
 
-def test_merge_dem_png_keep_files_true(sample_files):
+#merge all files into a single tiff in the top level dem directory 
+def test_merge_dem_tiff_keep_files_true_all(sample_files):
+    
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=True, file_type="tif", merge_method="all")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #nothing was merged in the project directory
+    for folder in sample_files:
+        if(before_counts_project[folder] != 1):
+            assert after_counts_project[folder] == before_counts_project[folder]
+        else:
+            assert after_counts_project[folder] == 1
+        assert "merged.tif" not in os.listdir(folder)
+
+    
+    #merged in the top-level directory
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert after_counts_dem == before_counts_dem + 1
+
+#remove all files or subfolders that are not in the top level dem directory
+def test_merge_dem_tiff_keep_files_false_all(sample_files):
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    merge_dem(sample_files, keep_files=False, file_type="tif", merge_method="all")
+
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #merged in the top-level directory
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert after_counts_dem == 1
+
+
+#merge projects and top level
+def test_merge_dem_tiff_keep_files_true_both(sample_files):
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=True, file_type="tif", merge_method="both")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #nothing was merged in the project directory
+    for folder in sample_files:
+        if(before_counts_project[folder] != 1):
+            assert after_counts_project[folder] == before_counts_project[folder] + 1
+            assert "merged.tif" in os.listdir(folder)   
+        else:
+            assert after_counts_project[folder] == 1
+            assert "merged.tif" not in os.listdir(folder)
+
+    
+    #merged in the top-level directory
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert after_counts_dem == before_counts_dem + 1
+
+#merge projects but remove everything that is not merged
+def test_merge_dem_tiff_keep_files_false_both(sample_files):
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=False, file_type="tif", merge_method="both")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+        
+    for folder in sample_files:
+        assert after_counts_project[folder] == 1
+        if(before_counts_project[folder] != 1):
+            assert "merged.tif" in os.listdir(folder)
+        else:
+            assert "merged.tif" not in os.listdir(folder)
+
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert after_counts_dem == before_counts_dem + 1
+    
+
+#merge only png in the project directory
+def test_merge_dem_png_keep_files_true_project(sample_files):
     before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
-    merge_dem(sample_files, keep_files=True, file_type="png")
+    merge_dem(sample_files, keep_files=True, file_type="png", merge_method="project")
 
     after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
@@ -92,12 +197,12 @@ def test_merge_dem_png_keep_files_true(sample_files):
         else:
             assert after_counts[folder] == 1
             assert "merged.tif" not in os.listdir(folder)
-            assert "merged.r16" not in os.listdir(folder)
+            assert "merged.png" not in os.listdir(folder)
 
-
-def test_merge_dem_png_keep_files_false(sample_files):
+#delete all files exelcuding png in the project directory
+def test_merge_dem_png_keep_files_false_project(sample_files):
     before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
-    merge_dem(sample_files, keep_files=False, file_type="png")
+    merge_dem(sample_files, keep_files=False, file_type="png", merge_method="project")
 
     after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
     for folder in sample_files:
@@ -107,10 +212,116 @@ def test_merge_dem_png_keep_files_false(sample_files):
         else:
             assert "merged.png" not in os.listdir(folder)
 
-def test_merge_dem_raw_keep_files_true(sample_files):
+
+#keep all files in the top level directory
+def test_merge_dem_png_keep_files_true_all(sample_files):
+    
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=True, file_type="png", merge_method="all")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #nothing was merged in the project directory
+    for folder in sample_files:
+        if(before_counts_project[folder] != 1):
+            assert after_counts_project[folder] == before_counts_project[folder]
+        else:
+            assert after_counts_project[folder] == 1
+        assert "merged.tif" not in os.listdir(folder)
+    
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert "merged.png" in os.listdir(dem_dir)
+    
+    #merged tif, merged png, and xml file should be located here
+    assert after_counts_dem == before_counts_dem + 3
+
+#remove all files except merged files in the top level directory
+def test_merge_dem_png_keep_files_false_all(sample_files):
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    merge_dem(sample_files, keep_files=False, file_type="png", merge_method="all")
+
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #merged in the top-level directory
+    assert "merged.png" in os.listdir(dem_dir)
+    assert "merged.tif" not in os.listdir(dem_dir)
+    assert after_counts_dem == 1
+
+
+def test_merge_dem_png_keep_files_true_both(sample_files):
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=True, file_type="png", merge_method="both")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #nothing was merged in the project directory
+    for folder in sample_files:
+        print(folder)
+        if(before_counts_project[folder] != 1):
+            assert after_counts_project[folder] == before_counts_project[folder] + 3
+            assert "merged.png" in os.listdir(folder)
+            assert "merged.tif" in os.listdir(folder)   
+        else:
+            assert after_counts_project[folder] == 1
+            assert "merged.png" not in os.listdir(folder)
+            assert "merged.tif" not in os.listdir(folder)
+
+    
+    #merged in the top-level directory
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert "merged.png" in os.listdir(dem_dir)
+    assert after_counts_dem == before_counts_dem + 3
+
+
+def test_merge_dem_png_keep_files_false_both(sample_files):
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=False, file_type="png", merge_method="both")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+        
+    for folder in sample_files:
+        assert after_counts_project[folder] == 1
+        if(before_counts_project[folder] != 1):
+            assert "merged.png" in os.listdir(folder)
+        else:
+            assert "merged.tif" not in os.listdir(folder)
+
+    assert "merged.png" in os.listdir(dem_dir)
+    assert after_counts_dem == before_counts_dem + 1
+
+
+
+def test_merge_dem_raw_keep_files_true_project(sample_files):
     before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
-    merge_dem(sample_files, keep_files=True, file_type="r16")
+    merge_dem(sample_files, keep_files=True, file_type="r16", merge_method="project")
 
     after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
@@ -125,10 +336,11 @@ def test_merge_dem_raw_keep_files_true(sample_files):
             assert "merged.tif" not in os.listdir(folder)
             assert "merged.r16" not in os.listdir(folder)
 
-def test_merge_dem_raw_keep_files_false(sample_files):
+
+def test_merge_dem_raw_keep_files_false_project(sample_files):
     before_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
-    merge_dem(sample_files, keep_files=False, file_type="r16")
+    merge_dem(sample_files, keep_files=False, file_type="r16", merge_method="project")
 
     after_counts = {folder: len(os.listdir(folder)) for folder in sample_files}
 
@@ -138,6 +350,109 @@ def test_merge_dem_raw_keep_files_false(sample_files):
             assert "merged.r16" in os.listdir(folder)
         else:
             assert "merged.r16" not in os.listdir(folder)
+
+
+def test_merge_dem_raw_keep_files_true_all(sample_files):
+    
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=True, file_type="r16", merge_method="all")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #nothing was merged in the project directory
+    for folder in sample_files:
+        if(before_counts_project[folder] != 1):
+            assert after_counts_project[folder] == before_counts_project[folder]
+        else:
+            assert after_counts_project[folder] == 1
+        assert "merged.tif" not in os.listdir(folder)
+    
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert "merged.r16" in os.listdir(dem_dir)
+    
+    #merged tif, merged png, xml, and hdr file should be located here
+    assert after_counts_dem == before_counts_dem + 4
+
+
+def test_merge_dem_raw_keep_files_false_all(sample_files):
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    merge_dem(sample_files, keep_files=False, file_type="r16", merge_method="all")
+
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #merged in the top-level directory
+    assert "merged.r16" in os.listdir(dem_dir)
+    assert "merged.tif" not in os.listdir(dem_dir)
+    assert after_counts_dem == 1
+
+
+def test_merge_dem_raw_keep_files_true_both(sample_files):
+    #get the top level directory
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=True, file_type="r16", merge_method="both")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+    
+    #nothing was merged in the project directory
+    for folder in sample_files:
+        print(folder)
+        if(before_counts_project[folder] != 1):
+            assert after_counts_project[folder] == before_counts_project[folder] + 4
+            assert "merged.r16" in os.listdir(folder)
+            assert "merged.tif" in os.listdir(folder)   
+        else:
+            assert after_counts_project[folder] == 1
+            assert "merged.r16" not in os.listdir(folder)
+            assert "merged.tif" not in os.listdir(folder)
+
+    
+    #merged in the top-level directory
+    assert "merged.tif" in os.listdir(dem_dir)
+    assert "merged.r16" in os.listdir(dem_dir)
+    assert after_counts_dem == before_counts_dem + 4
+
+
+def test_merge_dem_png_keep_files_false_both(sample_files):
+    for key in sample_files:
+        dem_dir = key.rsplit("/", 1)[0]
+        break
+
+    before_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    before_counts_dem = len(os.listdir(dem_dir))
+    
+    merge_dem(sample_files, keep_files=False, file_type="r16", merge_method="both")
+
+    after_counts_project = {folder: len(os.listdir(folder)) for folder in sample_files}
+    after_counts_dem = len(os.listdir(dem_dir))
+        
+    for folder in sample_files:
+        assert after_counts_project[folder] == 1
+        if(before_counts_project[folder] != 1):
+            assert "merged.r16" in os.listdir(folder)
+        else:
+            assert "merged.tif" not in os.listdir(folder)
+
+    assert "merged.r16" in os.listdir(dem_dir)
+    assert after_counts_dem == before_counts_dem + 1
 
 
 @pytest.mark.parametrize("new_file_type,precision,expected_ext", [

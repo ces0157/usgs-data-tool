@@ -66,7 +66,15 @@ def main():
         choices = ["no-merge", "merge-keep", "merge-delete"],
         default = "merge-keep",
         help = "For each project that gets downloaded merge or don't merge the GeoTIFF files into a single file"
-        "merge-keep keeps all original .tif/PNG/.r16 files. merge-delete removes all original files and only keeps the merged output"
+        "merge-keep keeps all original .tif/PNG/.r16 files and any metadata that get's generated. merge-delete removes all original files and only keeps the merged output"
+    )
+
+    parser.add_argument(
+        "--dem-merge-method",
+        type = str,
+        choices = ["project", "all", "both"],
+        default = "all",
+        help="Merge DEM Files accross projects or only merge DEM files within projects. Note: FILES FROM differet years may overlap or have differing structures"
     )
 
     # parser.add_argument(
@@ -75,15 +83,6 @@ def main():
     #     help='For each GeoTiff that gets downloaded ' \
     #     'crop/filter down the Tiff to only the AOI being used. Some datasets may intersect with the AOI' \
     #         'but are not a part of it')
-
-    # parser.add_argument(
-    #     "dem-merge-method",
-    #     type = str,
-    #     choices = ["project", "everything"],
-    #     default = "everything",
-    #     help="Merge DEM Files accross projects or only merge DEM files within projects. Note: FILES FROM differet years may overlap or have differing structures"
-    # )
-
 
     # parser.add_argument(
     #     "--dem-scale",
