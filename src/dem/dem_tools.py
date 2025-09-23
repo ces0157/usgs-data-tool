@@ -126,7 +126,10 @@ def merge(output_dir: str, files, file_type: str, precision=None, filter = False
         destNameOrDestDS=output_file_tif,
         srcDSOrSrcDSTab=files,
         format="GTiff",
-        dstSRS="EPSG:4326"
+        dstSRS="EPSG:4326",
+        #width=8129,
+        #height=8129,
+        resampleAlg="cubic"
     )
 
     if filter:
@@ -134,7 +137,10 @@ def merge(output_dir: str, files, file_type: str, precision=None, filter = False
         gdal.Translate(
             tmp_file,
             output_file_tif,
-            projWin=(bbox[0], bbox[3], bbox[2], bbox[1]) # minX, maxY, maxX, minY
+            projWin=(bbox[0], bbox[3], bbox[2], bbox[1]), # minX, maxY, maxX, minY
+            #width=4033,
+            #height=4033,
+            resampleAlg="cubic"
         )
 
         os.replace(tmp_file, output_file_tif)
