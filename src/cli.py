@@ -84,13 +84,14 @@ def main():
         'crop/filter down the Tiff to only the AOI being used. Some datasets may intersect with the AOI' \
             'but are not a part of it. NOTE: This is only supported with Merged files (Single file support coming soon)')
 
-    # parser.add_argument(
-    #     "--dem-scale",
-    #     type=str,
-    #     choices = ["none", "auto", "1009", "2017", "4033", "8129", "8129"],
-    #     default="auto",
-    #     help="Scale the raw and or png files resolution to be combatible with UE terrain import. Only scales if dem-output is changed to png or raw"
-    # )
+    parser.add_argument(
+        "--dem-resolution",
+        type=str,
+        choices = ["none", "auto", "1009", "2017", "4033", "8129"],
+        default="auto",
+        help="Scale the merged raw and or png files resolution to be combatible with UE terrain import. Only scales merged files" \
+            "since single files can be represented in Unreal Engine"
+    )
 
     parser.add_argument(
         "--merge-lidar",
@@ -104,12 +105,6 @@ def main():
 
 
     args = parser.parse_args()
-    
-    if (args.dem_filter):
-        print("we want to crop")
-    else:
-        print("no crop")
-
     
     #used to help ensure easy string additions later on in the code
     if args.output_dir[-1] == "/":

@@ -6,10 +6,11 @@ import glob
 import shutil
 import subprocess
 import shutil
+import math
 
 
 #TODO add this back in
-#VALID_RESOLUTIONS = {1009, 2017, 4033, 8129}  # UE-supported sizes (power of 2 + 1)
+VALID_RESOLUTIONS = {1009, 2017, 4033, 8129}  # UE-supported sizes (power of 2 + 1)
 
 def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None):
     """
@@ -26,6 +27,9 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
 
     band = src_ds.GetRasterBand(1)
     min_val, max_val = band.ComputeRasterMinMax(True)
+    
+    vertical_range = (max_val - min_val)
+    print(f"Vertical range:  {str(vertical_range)}")
         
     
     if new_file_type == "png":
@@ -57,7 +61,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
             scaleParams=[[min_val, max_val, 0, 65535]],
         )
 
-def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None, filter = False, bbox=None):
+def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None, filter = False, bbox=None, scale_resolution='none'):
     """
     Merge DEM files together into a single GeoTIFF file
 
@@ -76,7 +80,14 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             
             #create an output GTIFF
             #TODO: TEST filter for just project
-            merge(key, files[key], file_type, precision)
+            #this is done so we wait to rescale unitl after all files have been merged. We want to combine all at native resoltuion before crooping
+            #and rescaling
+            if merge_method != "both":
+                merge(key, files[key], file_type, precision, filter, bbox, scale_resolution)
+            
+            #no resizing,cropping, or conversion will occur unitl after everything is combined.
+            else:
+                merge(key, files[key], "tif", precision)
 
         #we just need to merge the merged tiff files into a singular file
         if merge_method == "both":
@@ -90,8 +101,16 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                 
                 #get the output directory for digital elevation maps 
                 output_dir = key.rsplit("/", 1)[0]
-            #TODO: TEST filter for both
-            merge(output_dir, merged_files, file_type, precision)
+            
+            #merge all project files together (i.e merged.tif from project1, project2, etc.)
+            merge(output_dir, merged_files, file_type, precision, filter, bbox, scale_resolution)
+            
+            #now that we combined all merged files, ensure the one's in each project are rescaled to target aoi and converted
+            for file in merged_files:
+                project_output_dir = file.rsplit("/", 1)[0]
+                translate_and_replace(project_output_dir, file, file_type, precision, filter, bbox, scale_resolution)
+                
+
      
     elif merge_method == "all":
         all_files = []
@@ -100,14 +119,14 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             #get the output directory for digital elevation maps 
             output_dir = key.rsplit("/", 1)[0]
         
-        merge(output_dir, all_files, file_type, precision, filter, bbox)    
+        merge(output_dir, all_files, file_type, precision, filter, bbox, scale_resolution)    
    
     #remove all files that are not merged files
     if not keep_files:
         remove_files(files, file_type, merge_method)
 
 
-def merge(output_dir: str, files, file_type: str, precision=None, filter = False, bbox=None):
+def merge(output_dir: str, files, file_type: str, precision=None, filter = False, bbox=None, scale_resolution="none"):
     """
     Args:
 
@@ -120,35 +139,61 @@ def merge(output_dir: str, files, file_type: str, precision=None, filter = False
     filter: crop the DEM to specified area
     bbox: the area of interest to filter too
     """
-
+    #TODO FIX RESOLUTION PROBLEMS
     output_file_tif = output_dir + "/merged.tif"
+    
+    
     gdal.Warp(
         destNameOrDestDS=output_file_tif,
         srcDSOrSrcDSTab=files,
         format="GTiff",
         dstSRS="EPSG:4326",
-        #width=8129,
-        #height=8129,
         resampleAlg="cubic"
     )
 
+    translate_and_replace(output_dir, output_file_tif, file_type, precision, filter, bbox, scale_resolution)
+
+   
+
+
+def translate_and_replace(output_dir:str, output_file_tif:str , file_type:str, precision=None, filter = False, bbox=None, scale_resolution="none"):
+    """
+    Translates, converts, and replaces files if need be
+    
+    output_dir: where we are saving too
+    output_file_tif: the tiff we are modifying/saving
+    file_type: how to save the merged output (tif, png, raw)
+    precision: the precision that we save too 
+    filter: crop the DEM to specified area
+    bbox: the area of interest to filter too
+    """
+    tmp_file = output_dir + "/temp.tif"
+    src_ds = gdal.Open(output_file_tif)
+    width, height = get_resoltuion(src_ds, scale_resolution)
     if filter:
-        tmp_file = output_dir + "/filtered.tif"
         gdal.Translate(
             tmp_file,
             output_file_tif,
             projWin=(bbox[0], bbox[3], bbox[2], bbox[1]), # minX, maxY, maxX, minY
-            #width=4033,
-            #height=4033,
+            width=width,
+            height=height,
+            resampleAlg="cubic"
+        )
+    else:
+        gdal.Translate(
+            tmp_file,
+            output_file_tif,
+            width=width,
+            height=height,
             resampleAlg="cubic"
         )
 
-        os.replace(tmp_file, output_file_tif)
+    os.replace(tmp_file, output_file_tif)
 
     if file_type != "tif":
         output_file = output_dir + "/" + "merged." + file_type 
         convert_tiff(output_file_tif, file_type, output_file, precision)
-
+     
 
 
 #TODO REFACTOR REDUDANT CODE
@@ -192,38 +237,41 @@ def remove_files(files: str, file_type:str, merge_method: str):
                 os.remove(dem_dir + "/" + folder_contents[i])
 
     
-    
-#TODO add resolution check back in
-# def check_resolution(src_ds, resolution: str):
-#     """
-#     Check the resolution of GeoTIFF file and change if required
+#TODO MAKE resolution unit tests 
+def get_resoltuion(src_ds, resolution: str):
+    """
+    Check the resolution of GeoTIFF file and change if required
 
-#     Args:
-#         src_ds: GeoTiff file
-#         resolution: the type resoltuion we need to change too (if required)
+    Args:
+        src_ds: GeoTiff file
+        resolution: the type resoltuion we need to change too (if required)
         
-#     """
-#     width = src_ds.RasterXSize
-#     height = src_ds.RasterYSize
-
-#     print(f"Current GeoTIFF resolution ... {width} x {height}")
-#     if width == height and width in VALID_RESOLUTIONS:
-#         print("✅ Resolution already matches a valid Unreal Engine landscape resolution!")
+    """
+    if resolution != "auto" and resolution != "none":
+        print(f"Chaning Resoltuion to {resolution} x {resolution}")
+        return int(resolution), int(resolution)
         
-#     elif resolution != "none":
-#         if resolution == "auto":
-#             print("⚠️ Not a valid UE landscape size, auto resampling")
-#             print(f"Nearest valid sizes: {min(VALID_RESOLUTIONS, key=lambda x: abs(x-width))} or {min(VALID_RESOLUTIONS, key=lambda x: abs(x-height))}")
-#             new_resolution = min(VALID_RESOLUTIONS, key=lambda x: abs(x-width))
-#         else:
-#             print(f"⚠️ Not a valid UE landscape size, using custom resolution {resolution}")
-#             new_resolution = int(resolution)
-
-#         src_ds = gdal.Warp("", src_ds, width=new_resolution, height=new_resolution,format='VRT')
     
-#     else:
-#         print("Skipping Resolution resampling  ...")
+    else:
+        width = src_ds.RasterXSize
+        height = src_ds.RasterYSize
 
-#     return src_ds
+        if resolution == "none":
+            print(f"Keeping resoltuion the same: {width} x {height}")
+            return width, height
+
+        resolution_value = None
+        min_resolution = math.inf
+        for number in VALID_RESOLUTIONS:
+            resolution = math.sqrt((number - width) ** 2 + (number - height) **2)
+            if resolution < min_resolution:
+                resolution_value = number
+                min_resolution = resolution
+        
+        print(f"Auto scaling resolution to {resolution_value} x {resolution_value}")
+        return int(resolution_value), int(resolution_value)
+
+
+    
 
    

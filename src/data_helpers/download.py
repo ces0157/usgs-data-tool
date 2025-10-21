@@ -54,9 +54,9 @@ def download_data(args, download_information: dict, output_dir:str):
     #merging files related to DEM files
     if args.type == "dem" and (args.dem_merge == "merge-keep" or args.dem_merge == "merge-delete"):
         if args.dem_merge == "merge-keep":
-            merge_dem(project_dirs, True, args.dem_output, args.dem_merge_method, args.png_precision, args.dem_filter, args.aoi)
+            merge_dem(project_dirs, True, args.dem_output, args.dem_merge_method, args.png_precision, args.dem_filter, args.aoi, args.dem_resolution)
         else:
-            merge_dem(project_dirs, False, args.dem_output, args.dem_merge_method, args.png_precision, args.dem_filter, args.aoi)
+            merge_dem(project_dirs, False, args.dem_output, args.dem_merge_method, args.png_precision, args.dem_filter, args.aoi, args.dem_resolution)
         
     #merging files related to lidar
     if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):

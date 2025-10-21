@@ -40,9 +40,6 @@ def fetch_datasets(dataset_name: str, dataset_format: str, bbox: tuple) -> list[
     Returns:
         list of dicts containing dataset info and download URLs.
     """
-
-    
-    print(",".join(map(str, bbox)))
     params = {
         "datasets": dataset_name,
         "bbox": ",".join(map(str, bbox)),
@@ -55,7 +52,6 @@ def fetch_datasets(dataset_name: str, dataset_format: str, bbox: tuple) -> list[
         print("Error:", response.status_code, response.text)
         return []
     
-    print(response.text)
     data = response.json()
 
     results = []
