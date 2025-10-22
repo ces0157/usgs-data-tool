@@ -10,3 +10,4 @@ pyyaml
 lark
 Jinja2
 importlib-metadata
+gdal
