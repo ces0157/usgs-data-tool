@@ -78,11 +78,15 @@ def main():
     )
 
     parser.add_argument(
-        '--dem-filter', 
-        action='store_true', 
+        '--dem-filter-type', 
+        type = str,
+        choices = ["none", "merge", "all"],
+        default="none", 
         help='For each GeoTiff that gets downloaded ' \
         'crop/filter down the Tiff to only the AOI being used. Some datasets may intersect with the AOI' \
-            'but are not a part of it. NOTE: This is only supported with Merged files (Single file support coming soon)')
+            'but are not a part of it. "none" will not filter any of the DEM files, "merge" will only filter the merged files' \
+                'If only one file is found in a project this will be rescaled and conveted. "any" will do this to any file merged or downloaded'
+    )
 
     parser.add_argument(
         "--dem-resolution",

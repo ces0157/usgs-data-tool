@@ -2,7 +2,7 @@ import os
 import requests
 from tqdm import tqdm
 from lidar.lidar_tools import merge_lidar
-from dem.dem_tools import convert_tiff, merge_dem
+from dem.dem_tools import convert_tiff, merge_dem, filter_dem, warp_dem
 
 def download_data(args, download_information: dict, output_dir:str):
     """
@@ -29,7 +29,7 @@ def download_data(args, download_information: dict, output_dir:str):
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
-        
+        print(filename)
 
         if project_dir in project_dirs:
             project_dirs[project_dir].append(filename)
@@ -50,13 +50,31 @@ def download_data(args, download_information: dict, output_dir:str):
             output_filename = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "." + args.dem_output
             convert_tiff(filename, args.dem_output, output_filename, args.png_precision)
 
+        if args.type == "dem" and args.dem_filter_type == "all":
+            output_filterd = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "_filtered.tif"
+            output_warped = project_dir + "/warped.tif"
+            warp_dem([filename], output_warped)
+            filter_dem(output_warped, output_filterd, args.aoi, args.dem_resolution)
+            os.remove(output_warped)
+            if args.dem_output != "tif":
+                print("Converting filtered file ...")
+                output_filename = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "_filtered." + args.dem_output
+                convert_tiff(output_filterd, args.dem_output, output_filename, args.png_precision)
+
+    
     
     #merging files related to DEM files
     if args.type == "dem" and (args.dem_merge == "merge-keep" or args.dem_merge == "merge-delete"):
+        filter = False
+        if args.dem_filter_type == "merge" or args.dem_filter_type == "all":
+            filter = True
+        
         if args.dem_merge == "merge-keep":
-            merge_dem(project_dirs, True, args.dem_output, args.dem_merge_method, args.png_precision, args.dem_filter, args.aoi, args.dem_resolution)
+            merge_dem(project_dirs, True, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
         else:
-            merge_dem(project_dirs, False, args.dem_output, args.dem_merge_method, args.png_precision, args.dem_filter, args.aoi, args.dem_resolution)
+            merge_dem(project_dirs, False, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
+
+        
         
     #merging files related to lidar
     if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
