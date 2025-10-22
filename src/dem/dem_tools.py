@@ -29,7 +29,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
     min_val, max_val = band.ComputeRasterMinMax(True)
     
     vertical_range = (max_val - min_val)
-    print(f"Vertical range:  {str(vertical_range)}")
+    print(f"Vertical range of {file}: {str(vertical_range)}")
         
     
     if new_file_type == "png":
@@ -84,9 +84,9 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                     warp_dem(files[key], output_warped)
                     filter_dem(output_warped, output_filtered, bbox)
                     os.remove(output_warped)
-                    # if file_type != "tif":
-                    #     output_file = key + "/heightmap1_filtered." + file_type
-                    #     convert_tiff(output_filtered, file_type, output_file, precision)
+                    if file_type != "tif":
+                        output_file = key + "/heightmap1_filtered." + file_type
+                        convert_tiff(output_filtered, file_type, output_file, precision)
                 
                 continue
             
@@ -285,7 +285,6 @@ def remove_files(files: str, file_type:str, merge_method: str):
         
         #remove top level direcot
         folder_contents = os.listdir(dem_dir)
-        print(folder_contents)
         for i in range(0, len(folder_contents)):              
             if "merged" not in folder_contents[i] or file_type not in folder_contents[i] or "xml" in folder_contents[i]:
                 os.remove(dem_dir + "/" + folder_contents[i])
