@@ -1,0 +1,15 @@
+{
+  "aoi": [-84.45276,33.61891,-84.40453,33.65650],
+  "type": "dem",
+  "output_dir": "./output",
+
+  "dem_spec": "regular",
+  "dem_output": "png",
+  "png_precision": 16,
+  "dem_merge": "merge-keep",
+  "dem_merge_method": "all",
+  "dem_filter_type": "none",
+  "dem_resolution": "auto",
+
+  "merge_lidar": "merge-keep"
+}

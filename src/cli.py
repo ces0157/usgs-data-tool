@@ -12,28 +12,46 @@ def main():
         description="Download USGS data based on specified area of interest"
     )
 
+    # Optional config file argument
+    parser.add_argument(
+        "--config",
+        type=str,
+        help="Path to a JSON configuration file to use for defaults",
+    )
+
+    pre_args, remaining_argv = parser.parse_known_args()
+
+    # Load defaults from config if present
+    config_defaults = {}
+    if pre_args.config:
+        config_defaults = load_config(pre_args.config)
+
+    parser = argparse.ArgumentParser(
+        description="Download USGS data based on specified area of interest"
+    )
+
     parser.add_argument(
         "--aoi",
         type=float,
         nargs=4,
         metavar=("minLon", "minLat", "maxLon", "maxLat"),
-        help="Area of interest defined by minimum and maximum lat and long to make boudning box aoi",
-        required=True
+        help="Area of interest defined by minimum and maximum lat and long to make boudning box aoi"
+        #required=True
     )
 
     parser.add_argument(
         "--type",
         type=str,
         choices=["dem", "lidar"],
-        help="Type of data to pull from USGS",
-        required=True,
+        help="Type of data to pull from USGS"
+        #required=True,
     )
 
     parser.add_argument(
         "--output-dir",
         type=str,
-        help="Output directory of data",
-        required=True
+        help="Output directory of data"
+        #required=True
     )
 
     parser.add_argument(
@@ -111,9 +129,8 @@ def main():
         " Default: merge-keep"
     )
 
-
-
-    args = parser.parse_args()
+   
+    args = check_arguments(parser, config_defaults, remaining_argv, pre_args)
     
     #used to help ensure easy string additions later on in the code
     if args.output_dir[-1] == "/":
@@ -145,11 +162,44 @@ def main():
     
 
 
+def load_config(config_path):
+    """Load configuration file and return a dict."""
+    try:
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading config file: {e}")
+        sys.exit(1)
 
 
+def check_arguments(parser, config_defaults, remaining_argv, pre_args):
+    parser.set_defaults(**config_defaults)
 
+    # Parse again with config defaults applied
+    args = parser.parse_args(remaining_argv)
 
+    # ---- Enforce required fields only if config not provided ----
+    if not pre_args.config:
+        missing = []
+        if args.aoi is None:
+            missing.append("--aoi")
+        if args.type is None:
+            missing.append("--type")
+        if args.output_dir is None:
+            missing.append("--output-dir")
+        if missing:
+            parser.error(f"The following arguments are required when no config is used: {', '.join(missing)}")
 
+    # ---- Also check if config is missing any required keys ----
+    elif pre_args.config:
+        # Only warn, don't error — since CLI can override
+        for key in ["aoi", "type", "output_dir"]:
+            if key not in config_defaults and getattr(args, key) is None:
+                parser.error(
+                    f"'{key}' must be defined in the config file or passed on the command line."
+                )
+    
+    return args
 
 
 if __name__ == "__main__":
