@@ -1,5 +1,7 @@
 import os
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from tqdm import tqdm
 from lidar.lidar_tools import merge_lidar
 from dem.dem_tools import convert_tiff, merge_dem, filter_dem, warp_dem
@@ -21,15 +23,30 @@ def download_data(args, download_information: dict, output_dir:str):
     print(f"Downloading {len(download_information)} {args.type} datasets")
     for i in tqdm(range(0, len(download_information))):
         #get the name of the project we are downloading from
+        
+        session = requests.Session()
+        retries = Retry(
+            total=3,                 # Retry up to 3 times
+            backoff_factor=1,        # Wait 1s, then 2s, then 4s between retries
+            status_forcelist=[500, 502, 503, 504],  # Retry on these HTTP codes
+            allowed_methods=["GET", "POST"],        # Retry on these methods
+        )
+        
+        adapter = HTTPAdapter(max_retries=retries)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        
         url = download_information[i]["url"]
 
+        #create project name from the download url
         project_name = url.split("Projects/")[1].split("/")[0]
         project_dir = output_dir + "/" + args.type + "/" + project_name
 
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
-        print(filename)
+        print(f"Saving: {filename}")
 
         if project_dir in project_dirs:
             project_dirs[project_dir].append(filename)
@@ -38,7 +55,7 @@ def download_data(args, download_information: dict, output_dir:str):
 
         
         #TODO: REMOVE verify is False and set up handeling
-        r = requests.get(url, stream=True, timeout=20, verify=False)
+        r = session.get(url, stream=True, timeout=20, verify=True)
         r.raise_for_status()   # raise if HTTP error (404, 500, etc.)
 
         with open(filename, "wb") as f:
@@ -83,7 +100,7 @@ def download_data(args, download_information: dict, output_dir:str):
         else:
             merge_lidar(project_dirs, False)
 
-    
+
 
 
         
