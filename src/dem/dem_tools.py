@@ -1,4 +1,4 @@
-from osgeo import gdal
+from osgeo import gdal, osr
 import numpy as np
 from PIL import Image
 import os
@@ -7,12 +7,15 @@ import shutil
 import subprocess
 import shutil
 import math
-
-
+from pyproj import Transformer
+import sys
+from pathlib import Path
 
 VALID_RESOLUTIONS = {1009, 2017, 4033, 8129}  # UE-supported sizes (power of 2 + 1)
+US_SURVEY_FOOT_TO_M = 0.3048006096012192
+INTL_FOOT_TO_M = 0.3048
 
-def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None):
+def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None, scale_resolution="none"):
     """
     Convert GeoTIFF files into either a RAW (r16) or PNG 
 
@@ -30,6 +33,12 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
     
     vertical_range = (max_val - min_val)
     print(f"Vertical range of {file}: {str(vertical_range)}")
+
+    #print(f"precision:  {precision}")
+
+
+    width, height = get_resoltuion(src_ds, scale_resolution)
+    #print(width, height)
         
     
     if new_file_type == "png":
@@ -47,6 +56,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
             src_ds,
             format="PNG",        # Equivalent to -of PNG
             outputType=output_precision,  # Equivalent to -ot Byte
+            resampleAlg="cubic",
             scaleParams=[[min_val, max_val, 0, max_normalization]],
         )
     
@@ -58,6 +68,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
             src_ds,
             format="ENVI",             # RAW-like format with .hdr file
             outputType=gdal.GDT_UInt16,
+            resampleAlg="cubic",
             scaleParams=[[min_val, max_val, 0, 65535]],
         )
 
@@ -81,12 +92,14 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                     output_filtered = key + "/heightmap1_filtered.tif"
                     output_warped = key + "/heightmap1_warped.tif"
                     
-                    warp_dem(files[key], output_warped)
-                    filter_dem(output_warped, output_filtered, bbox)
+                    code, units = warp_dem(files[key], output_warped)
+                    filter_dem(output_warped, output_filtered, code, bbox, scale_resolution)
                     os.remove(output_warped)
                     if file_type != "tif":
                         output_file = key + "/heightmap1_filtered." + file_type
-                        convert_tiff(output_filtered, file_type, output_file, precision)
+                        convert_tiff(output_filtered, file_type, output_file, precision, scale_resolution)
+
+                    print_unreal_units(output_filtered)
                 
                 continue
             
@@ -97,11 +110,12 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             if merge_method != "both":
                 merge(key, files[key], file_type, precision, filter, bbox, scale_resolution)
             
-            #no resizing,cropping, or conversion will occur unitl after everything is combined.
+            #no resizing,cropping, or conversion will occur until after everything is combined.
             else:
                 merge(key, files[key], "tif", precision)
 
         #we just need to merge the merged tiff files into a singular file
+        #TODO: TEST the case for both
         if merge_method == "both":
             merged_files = []
             for key in files:
@@ -115,14 +129,14 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                 output_dir = key.rsplit("/", 1)[0]
             
             #merge all project files together (i.e merged.tif from project1, project2, etc.)
-            merge(output_dir, merged_files, file_type, precision, filter, bbox, scale_resolution)
+            code = merge(output_dir, merged_files, file_type, precision, filter, bbox, scale_resolution)
             
             #now that we combined all merged files, ensure the merged files in each project are rescaled to target aoi and converted
             #this should only happen if a merged file exists (aka when there are more htan two files to a project)
             if len(files[key]) != 1:
                 for file in merged_files:
                     project_output_dir = file.rsplit("/", 1)[0]
-                    translate_and_replace(project_output_dir, file, file_type, precision, filter, bbox, scale_resolution)
+                    translate_and_replace(project_output_dir, file, file_type, code, precision, filter, bbox, scale_resolution)
                 
 
      
@@ -161,33 +175,83 @@ def merge(output_dir: str, files, file_type: str, precision=None, filter = False
     output_file_tif = output_dir + "/merged.tif"
     
     print(f"merging files in {output_dir}")
-    #convert to lat long and merge
-    warp_dem(files, output_file_tif)
+    #merges all the files together
+    code, units = warp_dem(files, output_file_tif)
 
-    translate_and_replace(output_dir, output_file_tif, file_type, precision, filter, bbox, scale_resolution)
+    translate_and_replace(output_dir, output_file_tif, file_type, code, units, precision, filter, bbox, scale_resolution)
 
+    return code
 
 def warp_dem(input_files, out_file: str):
-    """"
-    Converts to Lat/lon and merge if nesseccary
     
+    
+    """
     Args:
     input_files: an array of files to be merged/changed
     out_file: name of the file to be changed
+
+    returns: the EPSG code to filter by
     """
     
+    codes = set()
+    merged_files = []
+    for i in range(0, len(input_files)):
+        ds = gdal.Open(input_files[i])
+        srs = ds.GetSpatialRef()  # returns osr.SpatialReference or None
+
+        if srs is None:
+            print("No CRS found.")
+        else:
+            srs.AutoIdentifyEPSG()
+            code = srs.GetAuthorityCode(None)
+            name = srs.GetAuthorityName(None)
+
+            codes.add(code)
+        
+        z_units = detect_z_units(input_files[i])
+
+        ##WE MADE NEED TO TAKE INTO ACCOUNT OTHER CONVERISON
+        if z_units['units'] == "US survey foot":
+            print(f"note this dataset elevation is in {z_units['units']}, converting elevation to metre to standarizde merging ...") 
+            converted = convert_dem_to_meters(input_files[i])
+            merged_files.append(converted)
+        else:
+            merged_files.append(input_files[i])
+        
+
+    
+    if(len(codes) == 1):
+        codes = list(codes)
+        #units = list(units)
+        print(f"All files being merged are part of the same UTM zone: {codes[0]} and z merging will happen automatically ...")
+
+    #TODO:Add a projection technique to deal with this problem
+    else:
+        print("Not all files about to be merged are part of the same UTM and some distortion could occur if combined. Do you wish to continue?: ")
+        user_response = input("Do you want to proceed? (yes/no): ")
+        if user_response.lower() == "yes":
+            print("Proceeding as requested.")
+        elif user_response.lower() == "no":
+            print("Operation cancelled.")
+            sys.exit("Stopping merge")
+
+    print(merged_files)
     gdal.Warp(
         destNameOrDestDS=out_file,
-        srcDSOrSrcDSTab=input_files,
+        srcDSOrSrcDSTab=merged_files,
         format="GTiff",
-        dstSRS="EPSG:4326",
         resampleAlg="cubic"
     )
-    
+
+    #TODO FIX this return since we don't need it anymore
+    return f"EPSG:{codes[0]}", "metre"    
 
 
 
-def filter_dem(input_tif: str, out_file: str, bbox = None, scale_resolution="none"):
+
+
+
+def filter_dem(input_tif: str, out_file: str, code: str, bbox = None, scale_resolution="none"):
     """
     Crop down the DEM file to the target location
     
@@ -196,23 +260,32 @@ def filter_dem(input_tif: str, out_file: str, bbox = None, scale_resolution="non
     out_file: the name we should use
     bbox: the area of interest to filter too
     scale_resolution should we rescale this file
+    code: the epsg code we are using for the project
     """
     
     src_ds = gdal.Open(input_tif)
     width, height = get_resoltuion(src_ds, scale_resolution)
 
+    transformer = Transformer.from_crs("EPSG:4326", code, always_xy=True)
+
+    minX, minY = transformer.transform(bbox[0], bbox[1])
+    maxX, maxY = transformer.transform(bbox[2], bbox[3])
+   
+   
     gdal.Translate(
         out_file,
         input_tif,
-        projWin=(bbox[0], bbox[3], bbox[2], bbox[1]), # minX, maxY, maxX, minY
+        projWin=(minX, maxY, maxX, minY), # minX, maxY, maxX, minY
         width=width,
         height=height,
         resampleAlg="cubic"
     )
+
+    
    
 
 
-def translate_and_replace(output_dir:str, input_tif:str , file_type:str, precision=None, filter = False, bbox=None, scale_resolution="none"):
+def translate_and_replace(output_dir:str, input_tif:str , file_type:str, code: str, units: str, precision=None, filter = False, bbox=None, scale_resolution="none"):
     """
     Translates, converts, and replaces files if need be
     
@@ -221,7 +294,8 @@ def translate_and_replace(output_dir:str, input_tif:str , file_type:str, precisi
     file_type: how to save the merged output (tif, png, raw)
     precision: the precision that we save too 
     filter: crop the DEM to specified area
-    bbox: the area of interest to filter too
+    bbox: the area of interest (in lat long) to filter too
+    code: the authority code the dataset(s) are in
     """
     #TODO: REFACTOR reduant code between filtered_dem and this
     tmp_file = output_dir + "/temp.tif"
@@ -230,7 +304,7 @@ def translate_and_replace(output_dir:str, input_tif:str , file_type:str, precisi
     
     if filter:
         output_filtered = output_dir + "/merged_filtered.tif"
-        filter_dem(input_tif, output_filtered, bbox, scale_resolution)
+        filter_dem(input_tif, output_filtered, code, bbox, scale_resolution)
 
     gdal.Translate(
         tmp_file,
@@ -244,10 +318,16 @@ def translate_and_replace(output_dir:str, input_tif:str , file_type:str, precisi
 
     if file_type != "tif":
         output_file = output_dir + "/" + "merged." + file_type 
-        convert_tiff(input_tif, file_type, output_file, precision)
+        convert_tiff(input_tif, file_type, output_file, precision, scale_resolution)
         if filter:
             output_file = output_dir + "/" + "merged_filtered." + file_type
-            convert_tiff(output_dir + "/merged_filtered.tif", file_type, output_file, precision) 
+            convert_tiff(output_dir + "/merged_filtered.tif", file_type, output_file, precision, scale_resolution)
+
+
+    print_unreal_units(input_tif, units)
+    if filter:
+        print_unreal_units(output_dir + "/merged_filtered.tif", units)
+
      
 
 
@@ -323,6 +403,161 @@ def get_resoltuion(src_ds, resolution: str):
         
         print(f"Auto scaling resolution to {resolution_value} x {resolution_value}")
         return int(resolution_value), int(resolution_value)
+
+
+
+#not all digital elevation maps share the same z units so we are checking
+#what the value is
+def detect_z_units(path):
+    ds = gdal.Open(path)
+    if ds is None:
+        return {"units": None, "source": "error", "details": "Could not open dataset"}
+
+    # --- 1) Band-level unit metadata (most common when present)
+    band = ds.GetRasterBand(1)
+    print(band)
+    unit = band.GetUnitType()  # returns "" if not set
+    print(unit)
+    if unit:
+        return {"units": unit, "source": "band", "details": "Band Unit Type metadata present"}
+
+    # --- 2) Vertical CRS inside the SRS (VERT_CS / VERTCRS)
+    wkt = ds.GetProjectionRef()
+    if wkt:
+        srs = osr.SpatialReference()
+        srs.ImportFromWkt(wkt)
+
+        # If it's a compound CRS, vertical part may be accessible
+        if srs.IsCompound():
+            vert = srs.GetVerticalCS()
+            if vert:
+                # unit name + conversion factor
+                unit_name = vert.GetAttrValue("UNIT", 0)
+                return {"units": unit_name, "source": "vertical_crs", "details": "Found VerticalCS in CRS"}
+
+        # WKT2 vertical CRS sometimes not flagged as compound;
+        # brute search for VERTCRS/VERT_CS and UNIT inside it.
+        if "VERTCRS" in wkt or "VERT_CS" in wkt:
+            # naive parse: look for UNIT right after vertical node
+            # (good enough for most WKT)
+            try:
+                vert_srs = osr.SpatialReference()
+                vert_srs.ImportFromWkt(wkt)
+                unit_name = vert_srs.GetAttrValue("VERTCRS|CS|AXIS|UNIT", 0) \
+                            or vert_srs.GetAttrValue("VERT_CS|UNIT", 0)
+                if unit_name:
+                    return {"units": unit_name, "source": "vertical_crs", "details": "Vertical CRS unit found in WKT"}
+            except Exception:
+                pass
+
+    # --- 3) Fallback for known USGS 3DEP 1m DEM tiles
+    # Heuristic: filename pattern + USGS 1M tile context
+    name = (ds.GetDescription() or path).lower()
+    if "usgs_1m" in name or "3dep" in name:
+        # USGS standard elevation products in CONUS are meters/NAVD88
+        print("Please note that we did not find explicit z units within these files, we will assume meters are being used, but take note if elevations are not matching expectation")
+        return {
+            "units": "metre",
+            "source": "usgs_3dep_fallback",
+            "details": "USGS 3DEP/1m DEM products use meters (NAVD88 in CONUS)"
+        }
+
+    return {"units": None, "source": "unknown", "details": "No unit metadata or vertical CRS found"}
+
+
+
+def print_unreal_units(input_file, units="metre"):
+    ds = gdal.Open(input_file)
+    gt = ds.GetGeoTransform()
+
+
+    pixel_width  = gt[1]
+    pixel_height = abs(gt[5])
+
+    x_scale = pixel_width * 100
+    y_scale = pixel_height * 100
+
+
+    band = ds.GetRasterBand(1)
+    min_val, max_val = band.ComputeRasterMinMax(True)
+    
+    vertical_range = (max_val - min_val)
+    z_scale = (vertical_range * 100) / 512
+
+    print(f"UE x scale in cm: {x_scale} for {input_file}")
+    print(f"UE y scale in cm: {y_scale}) for {input_file}")
+    print(f"UE z scale in cm: {z_scale}) for {input_file}")
+
+
+
+def convert_dem_to_meters(in_path, factor=US_SURVEY_FOOT_TO_M):
+    p = Path(in_path)
+    name_no_ext = p.stem
+    directory = Path(in_path).parent
+
+    out_path = str(directory) + "/" + str(name_no_ext) + "_converted.tif"
+    
+    src = gdal.Open(in_path, gdal.GA_ReadOnly)
+    if src is None:
+        raise RuntimeError(f"Could not open {in_path}")
+
+    band = src.GetRasterBand(1)
+    nodata = band.GetNoDataValue()
+
+    # Read as float64 for safe scaling
+    arr = band.ReadAsArray().astype(np.float64)
+
+    # Apply scaling, preserving NoData
+    if nodata is not None:
+        mask = (arr == nodata)
+        arr *= factor
+        arr[mask] = nodata
+    else:
+        arr *= factor
+
+    # Create output with same size/projection/geotransform
+    driver = gdal.GetDriverByName("GTiff")
+    # copy common creation options; tweak as needed
+    options = [
+        "TILED=YES",
+        "COMPRESS=LZW",
+        "PREDICTOR=3",
+        "BIGTIFF=IF_SAFER"
+    ]
+
+    dst = driver.Create(
+        out_path,
+        src.RasterXSize,
+        src.RasterYSize,
+        1,
+        gdal.GDT_Float32,
+        options=options
+    )
+
+    dst.SetGeoTransform(src.GetGeoTransform())
+    dst.SetProjection(src.GetProjection())
+
+    out_band = dst.GetRasterBand(1)
+    out_band.WriteArray(arr.astype(np.float32))
+
+    if nodata is not None:
+        out_band.SetNoDataValue(nodata)
+
+    # Set vertical units metadata so gdalinfo shows Unit Type: metre
+    out_band.SetUnitType("metre")
+
+    out_band.FlushCache()
+    dst.FlushCache()
+    dst = None
+    src = None
+
+    print(f"Converted to meters -> {out_path}")
+    return out_path
+
+
+
+
+
 
 
     
