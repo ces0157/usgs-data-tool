@@ -32,7 +32,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
     min_val, max_val = band.ComputeRasterMinMax(True)
     
     vertical_range = (max_val - min_val)
-    print(f"Vertical range of {file}: {str(vertical_range)}")
+    #print(f"Vertical range of {file}: {str(vertical_range)}")
 
     #print(f"precision:  {precision}")
 
@@ -128,6 +128,7 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
                 #get the output directory for digital elevation maps 
                 output_dir = key.rsplit("/", 1)[0]
             
+            #print(merged_files)
             #merge all project files together (i.e merged.tif from project1, project2, etc.)
             code = merge(output_dir, merged_files, file_type, precision, filter, bbox, scale_resolution)
             
@@ -135,8 +136,10 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             #this should only happen if a merged file exists (aka when there are more htan two files to a project)
             if len(files[key]) != 1:
                 for file in merged_files:
+                    print(f"Starting rescaling of {file} ")
+                    print(code)
                     project_output_dir = file.rsplit("/", 1)[0]
-                    translate_and_replace(project_output_dir, file, file_type, code, precision, filter, bbox, scale_resolution)
+                    translate_and_replace(project_output_dir, file, file_type, code, "metre",precision, filter, bbox, scale_resolution)
                 
 
      
@@ -152,6 +155,8 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
     #remove all files that are not merged files
     if not keep_files:
         remove_files(files, file_type, merge_method)
+
+
 
 
 def merge(output_dir: str, files, file_type: str, precision=None, filter = False, bbox=None, scale_resolution="none"):
@@ -285,7 +290,7 @@ def filter_dem(input_tif: str, out_file: str, code: str, bbox = None, scale_reso
    
 
 
-def translate_and_replace(output_dir:str, input_tif:str , file_type:str, code: str, units: str, precision=None, filter = False, bbox=None, scale_resolution="none"):
+def translate_and_replace(output_dir:str, input_tif:str , file_type:str, code: str, units="metre", precision=None, filter = False, bbox=None, scale_resolution="none"):
     """
     Translates, converts, and replaces files if need be
     
@@ -381,7 +386,7 @@ def get_resoltuion(src_ds, resolution: str):
         
     """
     if resolution != "auto" and resolution != "none":
-        print(f"Chaning Resoltuion to {resolution} x {resolution}")
+        print(f"Changing Resoltuion to {resolution} x {resolution}")
         return int(resolution), int(resolution)
         
     
@@ -415,9 +420,7 @@ def detect_z_units(path):
 
     # --- 1) Band-level unit metadata (most common when present)
     band = ds.GetRasterBand(1)
-    print(band)
     unit = band.GetUnitType()  # returns "" if not set
-    print(unit)
     if unit:
         return {"units": unit, "source": "band", "details": "Band Unit Type metadata present"}
 
