@@ -42,7 +42,7 @@ def main():
     parser.add_argument(
         "--type",
         type=str,
-        choices=["dem", "lidar"],
+        choices=["dem", "lidar", "both"],
         help="Type of data to pull from USGS"
         #required=True,
     )
@@ -129,6 +129,23 @@ def main():
         " Default: merge-keep"
     )
 
+    parser.add_argument(
+        "--lidar-filter",
+        type =str,
+        choices = ["no-filter", "filter"],
+        default = "fitler",
+        help = "After Lidar is merged, filter to the boundary that was specified. ONLY MERGED IS CURRENTLY SUPPORTED"
+    )
+
+    parser.add_argument(
+        "--lidar-reproject",
+        choices = ["none", "auto"],
+        default = "none",
+        help = "If the --both tag is selected for the output type then we can reproject" \
+        "the lidar into the same coordinate system as the digital elevation maps. Note: THIS is only supported if both and" \
+        "dem-merge are selected"
+    )
+
    
     args = check_arguments(parser, config_defaults, remaining_argv, pre_args)
     
@@ -152,8 +169,14 @@ def main():
     bbox = tuple(args.aoi)
     if args.type == "dem":
         download_info = fetch_data_list(bbox, args.type, usgs_data, args.dem_spec)
-    else:
+    elif args.type == "lidar":
         download_info = fetch_data_list(bbox, args.type, usgs_data)
+    else:
+        download1 = fetch_data_list(bbox, "dem", usgs_data, args.dem_spec)
+        download2 = fetch_data_list(bbox, "lidar", usgs_data)
+        download_info = download1 + download2
+
+    print(download_info)
 
     print(f"Found {len(download_info)} files within the region of interest")
 
