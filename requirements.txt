@@ -11,3 +11,4 @@ lark
 Jinja2
 importlib-metadata
 gdal
+pyproj
