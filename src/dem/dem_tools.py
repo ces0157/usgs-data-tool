@@ -108,11 +108,11 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             #this is done so we wait to rescale unitl after all files have been merged. We want to combine all at native resoltuion before crooping
             #and rescaling
             if merge_method != "both":
-                merge(key, files[key], file_type, precision, filter, bbox, scale_resolution)
+                code = merge(key, files[key], file_type, precision, filter, bbox, scale_resolution)
             
             #no resizing,cropping, or conversion will occur until after everything is combined.
             else:
-                merge(key, files[key], "tif", precision)
+                code = merge(key, files[key], "tif", precision)
 
         #we just need to merge the merged tiff files into a singular file
         #TODO: TEST the case for both
@@ -150,11 +150,13 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             #get the output directory for digital elevation maps 
             output_dir = key.rsplit("/", 1)[0]
         
-        merge(output_dir, all_files, file_type, precision, filter, bbox, scale_resolution)    
+        code = merge(output_dir, all_files, file_type, precision, filter, bbox, scale_resolution)    
    
     #remove all files that are not merged files
     if not keep_files:
         remove_files(files, file_type, merge_method)
+
+    return code
 
 
 

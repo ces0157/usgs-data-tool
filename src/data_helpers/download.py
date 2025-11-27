@@ -3,7 +3,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from tqdm import tqdm
-from lidar.lidar_tools import merge_lidar
+from lidar.lidar_tools import merge_lidar, reproject_lidar#, filter_lidar, detect_crs
 from dem.dem_tools import convert_tiff, merge_dem, filter_dem, warp_dem
 
 
@@ -57,8 +57,9 @@ def download_data(args, download_information: dict, output_dir:str):
     Returns:
         list of dicts containing dataset info and download URLs.
     """
-    # dictonary containing project_dirs and associated files, start with any existing data to reuse
-    project_dirs = _load_existing_projects(output_dir, args.type)
+    # Dictionaries containing project_dirs and associated files, pre-loaded with existing data
+    dem_project_dirs = _load_existing_projects(output_dir, "dem")
+    lidar_project_dirs = _load_existing_projects(output_dir, "lidar")
 
     # Shared session with retries for all downloads
     session = requests.Session()
@@ -72,9 +73,16 @@ def download_data(args, download_information: dict, output_dir:str):
     adapter = HTTPAdapter(max_retries=retries)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
-
     print(f"Downloading {len(download_information)} {args.type} datasets")
     for i in tqdm(range(0, len(download_information))):
+        
+        title = download_information[i]['title']
+        if "Lidar" in title and "1M" not in title:
+            data_type = "lidar"
+        else:
+            data_type = "dem"
+        
+        
         #get the name of the project we are downloading from
 
         
@@ -82,70 +90,113 @@ def download_data(args, download_information: dict, output_dir:str):
 
         #create project name from the download url
         project_name = url.split("Projects/")[1].split("/")[0]
-        project_dir = output_dir + "/" + args.type + "/" + project_name
+
+        
+        project_dir = output_dir + "/" + data_type + "/" + project_name
 
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
         print(f"Saving: {filename}")
 
-        if project_dir not in project_dirs:
-            project_dirs[project_dir] = []
-
-        # Always include the path in the merge list, but avoid duplicates
-        if filename not in project_dirs[project_dir]:
-            project_dirs[project_dir].append(filename)
+        # Track file in appropriate dictionary based on data type
+        if data_type == "lidar":
+            if project_dir not in lidar_project_dirs:
+                lidar_project_dirs[project_dir] = []
+            if filename not in lidar_project_dirs[project_dir]:
+                lidar_project_dirs[project_dir].append(filename)
+        else:
+            if project_dir not in dem_project_dirs:
+                dem_project_dirs[project_dir] = []
+            if filename not in dem_project_dirs[project_dir]:
+                dem_project_dirs[project_dir].append(filename)
 
         # Skip downloading if the file is already present so we can reuse cached data
         if os.path.exists(filename):
             print(f"Found existing file, skipping download: {filename}")
         else:
-            #TODO: REMOVE verify is False and set up handeling
             r = session.get(url, stream=True, timeout=20, verify=True)
-            r.raise_for_status()   # raise if HTTP error (404, 500, etc.)
+            r.raise_for_status()
 
             with open(filename, "wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-        if args.type == "dem" and (args.dem_output != "tif"):
+        #we will filter the pointcloud now because filtering merged
+        #will be do costly
+        # if (args.type == "lidar" or args.type=="both") and args.lidar_filter == "filter":
+        #     filter_output = project_dir + f"/filtered{i}.las"
+        #     filter_lidar(filename, filter_output, args.aoi)
+            
+        #     crs_test = detect_crs(filename)
+
+        #     if project_dir in filtered_project_dirs:
+        #         filtered_project_dirs[project_dir].append(filter_output)
+        #     else:
+        #         filtered_project_dirs[project_dir] = [filter_output]
+
+
+
+
+        if data_type == "dem" and (args.dem_output != "tif"):
             print("Converting file ...")
-            output_filename = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "." + args.dem_output
+            output_filename = project_dir + "/" + "heightmap" + str(len(dem_project_dirs[project_dir])) + "." + args.dem_output
             convert_tiff(filename, args.dem_output, output_filename, args.png_precision)
 
-        if args.type == "dem" and args.dem_filter_type == "all":
-            output_filterd = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "_filtered.tif"
+        if data_type == "dem" and args.dem_filter_type == "all":
+            output_filterd = project_dir + "/" + "heightmap" + str(len(dem_project_dirs[project_dir])) + "_filtered.tif"
             output_warped = project_dir + "/warped.tif"
             warp_dem([filename], output_warped)
             filter_dem(output_warped, output_filterd, args.aoi, args.dem_resolution)
             os.remove(output_warped)
             if args.dem_output != "tif":
                 print("Converting filtered file ...")
-                output_filename = project_dir + "/" + "heightmap" + str(len(project_dirs[project_dir])) + "_filtered." + args.dem_output
+                output_filename = project_dir + "/" + "heightmap" + str(len(dem_project_dirs[project_dir])) + "_filtered." + args.dem_output
                 convert_tiff(output_filterd, args.dem_output, output_filename, args.png_precision)
 
     
     
     #merging files related to DEM files
-    if args.type == "dem" and (args.dem_merge == "merge-keep" or args.dem_merge == "merge-delete"):
+    if (args.type == "dem" or args.type == "both") and (args.dem_merge == "merge-keep" or args.dem_merge == "merge-delete"):
         filter = False
         if args.dem_filter_type == "merge" or args.dem_filter_type == "all":
+            print("filtering files")
             filter = True
         
         if args.dem_merge == "merge-keep":
-            merge_dem(project_dirs, True, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
+            code = merge_dem(dem_project_dirs, True, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
         else:
-            merge_dem(project_dirs, False, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
+            code = merge_dem(dem_project_dirs, False, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
 
         
-        
-    #merging files related to lidar
-    if args.type == "lidar" and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
+    if (args.type == "lidar" or args.type == "both") and args.lidar_reproject == "auto":
+        print(f"code to reproject lidar {code}")
+        lidar_project_dirs = reproject_lidar(lidar_project_dirs, code)
+
+
+    if (args.type == "lidar" or args.type == "both") and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
         if args.merge_lidar == "merge-keep":
-            merge_lidar(project_dirs, True)
+            merge_lidar(lidar_project_dirs, True)
         else:
-            merge_lidar(project_dirs, False)
+            merge_lidar(lidar_project_dirs, False)
 
+
+
+
+    #merging files related to lidar
+    # if (args.type == "lidar" or args.type == "both") and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
+        
+        
+    #     project_files = lidar_project_dirs
+    #     if args.lidar_filter == "filter":
+    #         project_files = filtered_project_dirs
+            
+    #     if args.merge_lidar == "merge-keep":
+    #         merge_lidar(project_files, True)
+    #     else:
+    #         merge_lidar(project_files, False)
+
+        
 
 
 
