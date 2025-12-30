@@ -3,7 +3,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from tqdm import tqdm
-from lidar.lidar_tools import merge_lidar, reproject_lidar#, filter_lidar, detect_crs
+from lidar.lidar_tools import merge_lidar, reproject_lidar, filter_lidar #, detect_crs
 from dem.dem_tools import convert_tiff, merge_dem, filter_dem, warp_dem
 
 def download_data(args, download_information: dict, output_dir:str):
@@ -27,7 +27,7 @@ def download_data(args, download_information: dict, output_dir:str):
     for i in tqdm(range(0, len(download_information))):
         
         title = download_information[i]['title']
-        if "Lidar" in title and "1M" not in title:
+        if "Lidar" in title and "1 Meter" not in title:
             data_type = "lidar"
         else:
             data_type = "dem"
@@ -136,16 +136,24 @@ def download_data(args, download_information: dict, output_dir:str):
 
     if (args.type == "lidar" or args.type == "both") and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
         if args.merge_lidar == "merge-keep":
-            merge_lidar(lidar_project_dirs, True)
+            merged_files = merge_lidar(lidar_project_dirs, True)
         else:
-            merge_lidar(lidar_project_dirs, False)
+            merged_files = merge_lidar(lidar_project_dirs, False)
+
+        if args.lidar_filter == "filter":
+            lidar_filter(merged_files, "merged_filtered.laz", args.aoi)
+
+        
+
+
+
+        
 
 
 
 
     #merging files related to lidar
     # if (args.type == "lidar" or args.type == "both") and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
-        
         
     #     project_files = lidar_project_dirs
     #     if args.lidar_filter == "filter":

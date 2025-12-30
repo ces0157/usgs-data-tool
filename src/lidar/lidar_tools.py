@@ -3,7 +3,7 @@ import glob
 import pdal
 from pathlib import Path
 import os 
-from pyproj import CRS
+from pyproj import CRS, Transformer
 
 def detect_epsg_from_las(path):
     print(path)
@@ -46,6 +46,7 @@ def merge_lidar(files: dict , keep_files: bool):
         keep_files: weather to keep the original files afterwards
         
     """
+    merged_files = {}
     for key in files:
         print(f"Merging laz files in {key} ")
         output_file = key + "/merged.laz"
@@ -69,6 +70,8 @@ def merge_lidar(files: dict , keep_files: bool):
             ]
         }
 
+        merged_files[key] = output_file
+
         # Convert to JSON string
         pipeline_json = json.dumps(pipeline_dict)
 
@@ -87,6 +90,8 @@ def merge_lidar(files: dict , keep_files: bool):
                 # Delete only if it's a file and not the one to keep
                 if os.path.isfile(file_path) and file_path != output_file:
                     os.remove(file_path)
+
+    return merged_files
 
 
 
@@ -143,6 +148,39 @@ def reproject_lidar(files: dict, out_srs):
             
     return new_files
             
+
+
+def filter_lidar(input_clouds: dict, output_cloud: str, bounds):
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:26917", always_xy=True)
+
+   
+
+    minE, minN = transformer.transform(bounds[0], bounds[1])
+    maxE, maxN = transformer.transform(bounds[2], bounds[3])
+
+    print(minE, minN, maxE, maxN)
+
+    for key in input_clouds:
+        input_cloud = input_clouds[key]
+        output_cloud = key + "/" + output_cloud
+        pipeline = {
+            "pipeline": [
+                input_cloud,
+                {
+                    "type": "filters.crop",
+                    "bounds": f"([{minE},{maxE}],[{minN},{maxN}])"
+                },
+                output_cloud
+            ]
+        }
+
+        # Save pipeline
+        with open(f"{key}/crop.json", "w") as f:
+            json.dump(pipeline, f, indent=4)
+
+        # Run PDAL
+        subprocess.run(["pdal", "pipeline", f"{key}/crop.json"])
+
 
 
 # def filter_lidar(input_cloud, output_cloud, bounds):

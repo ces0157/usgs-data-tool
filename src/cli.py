@@ -133,7 +133,7 @@ def main():
         "--lidar-filter",
         type =str,
         choices = ["no-filter", "filter"],
-        default = "fitler",
+        default = "filter",
         help = "After Lidar is merged, filter to the boundary that was specified. ONLY MERGED IS CURRENTLY SUPPORTED"
     )
 
