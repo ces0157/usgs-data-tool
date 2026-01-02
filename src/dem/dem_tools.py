@@ -316,9 +316,10 @@ def warp_dem(input_files, out_file: str):
         
 
     
+    # Convert codes to list for indexing
+    codes = list(codes)
+
     if(len(codes) == 1):
-        codes = list(codes)
-        #units = list(units)
         print(f"All files being merged are part of the same UTM zone: {codes[0]} and z merging will happen automatically ...")
 
     #TODO:Add a projection technique to deal with this problem
@@ -340,7 +341,10 @@ def warp_dem(input_files, out_file: str):
     )
 
     #TODO FIX this return since we don't need it anymore
-    return f"EPSG:{codes[0]}", "metre"    
+    if len(codes) > 0:
+        return f"EPSG:{codes[0]}", "metre"
+    else:
+        return "EPSG:4326", "metre"  # Default fallback    
 
 
 
