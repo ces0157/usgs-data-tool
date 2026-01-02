@@ -1,174 +1,294 @@
 import os
+import shutil
 import requests
 from requests.adapters import HTTPAdapter
+from requests.exceptions import ConnectionError, Timeout, RequestException
 from urllib3.util.retry import Retry
+from urllib.parse import urlparse
 from tqdm import tqdm
-from lidar.lidar_tools import merge_lidar, reproject_lidar, filter_lidar #, detect_crs
-from dem.dem_tools import convert_tiff, merge_dem, filter_dem, warp_dem
 
-def download_data(args, download_information: dict, output_dir:str):
+from lidar.lidar_tools import merge_lidar, reproject_lidar, filter_lidar
+from dem.dem_tools import convert_tiff, merge_dem, filter_dem, warp_dem
+from exceptions import (
+    DownloadError,
+    DownloadInterruptedError,
+    DiskSpaceError,
+    FileWriteError,
+    MalformedURLError,
+    ConnectionFailedError
+)
+
+# Download settings
+DOWNLOAD_TIMEOUT = 60  # seconds
+CHUNK_SIZE = 8192
+DISK_SPACE_BUFFER = 1.1  # 10% buffer for disk space check
+
+
+def validate_url(url: str) -> bool:
     """
-    Download, save and merge (depending on datatypes) the file
+    Validate that a URL has proper structure.
 
     Args:
-        args: command line arguments from the cli
-        
-        usgs_Data : json configuration holding names and format tpes 
+        url: URL string to validate.
 
     Returns:
-        list of dicts containing dataset info and download URLs.
+        True if URL is valid, False otherwise.
     """
-    #dictonary containing project_dirs and associated files
+    if not url:
+        return False
+    try:
+        result = urlparse(url)
+        return all([result.scheme in ('http', 'https'), result.netloc])
+    except Exception:
+        return False
+
+
+def check_disk_space(path: str, required_bytes: int) -> bool:
+    """
+    Check if sufficient disk space is available.
+
+    Args:
+        path: Path to check disk space for.
+        required_bytes: Number of bytes required.
+
+    Returns:
+        True if sufficient space available, False otherwise.
+    """
+    try:
+        total, used, free = shutil.disk_usage(path)
+        return free > required_bytes
+    except OSError:
+        # If we can't check, proceed anyway
+        return True
+
+
+def extract_project_name(url: str) -> str:
+    """
+    Extract project name from USGS download URL.
+
+    Args:
+        url: USGS download URL.
+
+    Returns:
+        Project name extracted from URL.
+
+    Raises:
+        MalformedURLError: If URL doesn't contain expected project structure.
+    """
+    try:
+        return url.split("Projects/")[1].split("/")[0]
+    except (IndexError, AttributeError):
+        raise MalformedURLError(f"Could not extract project name from URL: {url}")
+
+
+def safe_download(session: requests.Session, url: str, filename: str) -> None:
+    """
+    Download file with comprehensive error handling.
+
+    Args:
+        session: Requests session with retry configuration.
+        url: URL to download from.
+        filename: Local path to save file.
+
+    Raises:
+        MalformedURLError: If URL is invalid.
+        DiskSpaceError: If insufficient disk space.
+        ConnectionFailedError: If connection fails.
+        DownloadInterruptedError: If download is incomplete.
+        FileWriteError: If file cannot be written.
+    """
+    if not validate_url(url):
+        raise MalformedURLError(f"Invalid URL format: {url}")
+
+    try:
+        r = session.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT, verify=True)
+        r.raise_for_status()
+
+        # Check content length for disk space
+        content_length = int(r.headers.get('content-length', 0))
+        if content_length > 0:
+            output_dir = os.path.dirname(filename)
+            if not check_disk_space(output_dir, int(content_length * DISK_SPACE_BUFFER)):
+                raise DiskSpaceError(
+                    f"Insufficient disk space. Need approximately "
+                    f"{content_length // (1024*1024)}MB for {filename}"
+                )
+
+        bytes_written = 0
+        try:
+            with open(filename, "wb") as f:
+                for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
+                    if chunk:
+                        f.write(chunk)
+                        bytes_written += len(chunk)
+        except IOError as e:
+            # Clean up partial download
+            if os.path.exists(filename):
+                os.remove(filename)
+            raise FileWriteError(f"Failed to write file {filename}: {e}")
+
+        # Verify download completed
+        if content_length > 0 and bytes_written < content_length:
+            if os.path.exists(filename):
+                os.remove(filename)
+            raise DownloadInterruptedError(
+                f"Download incomplete: {bytes_written}/{content_length} bytes for {filename}"
+            )
+
+    except ConnectionError as e:
+        raise ConnectionFailedError(f"Connection failed during download of {url}: {e}")
+    except Timeout as e:
+        raise ConnectionFailedError(f"Download timed out for {url}: {e}")
+    except RequestException as e:
+        raise DownloadError(f"Download failed for {url}: {e}")
+
+
+def create_session() -> requests.Session:
+    """
+    Create a requests session with retry configuration.
+
+    Returns:
+        Configured requests Session.
+    """
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET", "POST"],
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+def download_data(args, download_information: list, output_dir: str) -> None:
+    """
+    Download, save and merge (depending on datatypes) the files.
+
+    Args:
+        args: Command line arguments from the cli.
+        download_information: List of dicts containing dataset info and download URLs.
+        output_dir: Base output directory for downloaded files.
+
+    Raises:
+        DownloadError: If download fails.
+        MalformedURLError: If URL is malformed.
+    """
     dem_project_dirs = {}
     lidar_project_dirs = {}
-    
-    #filtered_project_dirs = {}
+    code = None  # Track CRS code for lidar reprojection
+
     print(f"Downloading {len(download_information)} {args.type} datasets")
-    for i in tqdm(range(0, len(download_information))):
-        
-        title = download_information[i]['title']
+
+    session = create_session()
+
+    for i in tqdm(range(len(download_information))):
+        title = download_information[i].get('title', '')
+        url = download_information[i].get('url')
+
+        if not url:
+            print(f"Warning: No URL for item {i}, skipping...")
+            continue
+
+        # Determine data type from title
         if "Lidar" in title and "1 Meter" not in title:
             data_type = "lidar"
         else:
             data_type = "dem"
-        
-        
-        #get the name of the project we are downloading from
-        
-        session = requests.Session()
-        retries = Retry(
-            total=3,                 # Retry up to 3 times
-            backoff_factor=1,        # Wait 1s, then 2s, then 4s between retries
-            status_forcelist=[500, 502, 503, 504],  # Retry on these HTTP codes
-            allowed_methods=["GET", "POST"],        # Retry on these methods
-        )
-        
-        adapter = HTTPAdapter(max_retries=retries)
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
 
-        
-        url = download_information[i]["url"]
+        # Extract project name and create directory
+        try:
+            project_name = extract_project_name(url)
+        except MalformedURLError as e:
+            print(f"Warning: {e}, skipping...")
+            continue
 
-        #create project name from the download url
-        project_name = url.split("Projects/")[1].split("/")[0]
-
-        
-        project_dir = output_dir + "/" + data_type + "/" + project_name
-
+        project_dir = os.path.join(output_dir, data_type, project_name)
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
         print(f"Saving: {filename}")
 
+        # Track files by project
         if data_type == "lidar":
-            if project_dir in lidar_project_dirs:
-                lidar_project_dirs[project_dir].append(filename)
-            else:
-                lidar_project_dirs[project_dir] = [filename]
-        
+            if project_dir not in lidar_project_dirs:
+                lidar_project_dirs[project_dir] = []
+            lidar_project_dirs[project_dir].append(filename)
         else:
-            if project_dir in dem_project_dirs:
-                dem_project_dirs[project_dir].append(filename)
-            else:
-                dem_project_dirs[project_dir] = [filename]
+            if project_dir not in dem_project_dirs:
+                dem_project_dirs[project_dir] = []
+            dem_project_dirs[project_dir].append(filename)
 
-        
-        #TODO: REMOVE verify is False and set up handeling
-        r = session.get(url, stream=True, timeout=20, verify=True)
-        r.raise_for_status()   # raise if HTTP error (404, 500, etc.)
+        # Download the file
+        try:
+            safe_download(session, url, filename)
+        except DownloadError as e:
+            print(f"Error downloading {url}: {e}")
+            continue
 
-        with open(filename, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-
-        #we will filter the pointcloud now because filtering merged
-        #will be do costly
-        # if (args.type == "lidar" or args.type=="both") and args.lidar_filter == "filter":
-        #     filter_output = project_dir + f"/filtered{i}.las"
-        #     filter_lidar(filename, filter_output, args.aoi)
-            
-        #     crs_test = detect_crs(filename)
-
-        #     if project_dir in filtered_project_dirs:
-        #         filtered_project_dirs[project_dir].append(filter_output)
-        #     else:
-        #         filtered_project_dirs[project_dir] = [filter_output]
-
-
-
-
-        if data_type == "dem" and (args.dem_output != "tif"):
+        # Post-download processing for DEM files
+        if data_type == "dem" and args.dem_output != "tif":
             print("Converting file ...")
-            output_filename = project_dir + "/" + "heightmap" + str(len(dem_project_dirs[project_dir])) + "." + args.dem_output
+            output_filename = os.path.join(
+                project_dir,
+                f"heightmap{len(dem_project_dirs[project_dir])}.{args.dem_output}"
+            )
             convert_tiff(filename, args.dem_output, output_filename, args.png_precision)
 
         if data_type == "dem" and args.dem_filter_type == "all":
-            output_filterd = project_dir + "/" + "heightmap" + str(len(dem_project_dirs[project_dir])) + "_filtered.tif"
-            output_warped = project_dir + "/warped.tif"
+            output_filtered = os.path.join(
+                project_dir,
+                f"heightmap{len(dem_project_dirs[project_dir])}_filtered.tif"
+            )
+            output_warped = os.path.join(project_dir, "warped.tif")
             code, units = warp_dem([filename], output_warped)
-            filter_dem(output_warped, output_filterd, code, args.aoi, args.dem_resolution)
-            os.remove(output_warped)
+            filter_dem(output_warped, output_filtered, code, args.aoi, args.dem_resolution)
+
+            try:
+                os.remove(output_warped)
+            except OSError as e:
+                print(f"Warning: Could not remove temporary file {output_warped}: {e}")
+
             if args.dem_output != "tif":
                 print("Converting filtered file ...")
-                output_filename = project_dir + "/" + "heightmap" + str(len(dem_project_dirs[project_dir])) + "_filtered." + args.dem_output
-                convert_tiff(output_filterd, args.dem_output, output_filename, args.png_precision)
+                output_filename = os.path.join(
+                    project_dir,
+                    f"heightmap{len(dem_project_dirs[project_dir])}_filtered.{args.dem_output}"
+                )
+                convert_tiff(output_filtered, args.dem_output, output_filename, args.png_precision)
 
-    
-    
-    #merging files related to DEM files
-    if (args.type == "dem" or args.type == "both") and (args.dem_merge == "merge-keep" or args.dem_merge == "merge-delete"):
-        filter = False
-        if args.dem_filter_type == "merge" or args.dem_filter_type == "all":
-            print("filtering files")
-            filter = True
-        
-        if args.dem_merge == "merge-keep":
-            code = merge_dem(dem_project_dirs, True, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
-        else:
-            code = merge_dem(dem_project_dirs, False, args.dem_output, args.dem_merge_method, args.png_precision, filter, args.aoi, args.dem_resolution)
+    # Merge DEM files if requested
+    if (args.type == "dem" or args.type == "both") and args.dem_merge in ("merge-keep", "merge-delete"):
+        should_filter = args.dem_filter_type in ("merge", "all")
+        if should_filter:
+            print("Filtering files")
 
-        
+        keep_files = args.dem_merge == "merge-keep"
+        code = merge_dem(
+            dem_project_dirs,
+            keep_files,
+            args.dem_output,
+            args.dem_merge_method,
+            args.png_precision,
+            should_filter,
+            args.aoi,
+            args.dem_resolution
+        )
+
+    # Reproject LiDAR if requested
     if (args.type == "lidar" or args.type == "both") and args.lidar_reproject == "auto":
-        print(f"code to reproject lidar {code}")
-        lidar_project_dirs = reproject_lidar(lidar_project_dirs, code)
-
-
-    if (args.type == "lidar" or args.type == "both") and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
-        if args.merge_lidar == "merge-keep":
-            merged_files = merge_lidar(lidar_project_dirs, True)
+        if code:
+            print(f"Reprojecting lidar to {code}")
+            lidar_project_dirs = reproject_lidar(lidar_project_dirs, code)
         else:
-            merged_files = merge_lidar(lidar_project_dirs, False)
+            print("Warning: No CRS code available for lidar reprojection")
+
+    # Merge LiDAR files if requested
+    if (args.type == "lidar" or args.type == "both") and args.merge_lidar in ("merge-keep", "merge-delete"):
+        keep_files = args.merge_lidar == "merge-keep"
+        merged_files = merge_lidar(lidar_project_dirs, keep_files)
 
         if args.lidar_filter == "filter":
             filter_lidar(merged_files, "merged_filtered.laz", args.aoi)
-
-        
-
-
-
-        
-
-
-
-
-    #merging files related to lidar
-    # if (args.type == "lidar" or args.type == "both") and (args.merge_lidar == "merge-keep" or args.merge_lidar == "merge-delete"):
-        
-    #     project_files = lidar_project_dirs
-    #     if args.lidar_filter == "filter":
-    #         project_files = filtered_project_dirs
-            
-    #     if args.merge_lidar == "merge-keep":
-    #         merge_lidar(project_files, True)
-    #     else:
-    #         merge_lidar(project_files, False)
-
-        
-
-
-
-        
-
-
-

@@ -4,29 +4,108 @@ from PIL import Image
 import os
 import glob
 import shutil
-import subprocess
-import shutil
 import math
 from pyproj import Transformer
+from pyproj.exceptions import CRSError
 import sys
 from pathlib import Path
+
+from exceptions import (
+    InvalidGeoTIFFError,
+    GDALDriverError,
+    CRSTransformationError,
+    MergeError,
+    DEMError
+)
 
 VALID_RESOLUTIONS = {1009, 2017, 4033, 8129}  # UE-supported sizes (power of 2 + 1)
 US_SURVEY_FOOT_TO_M = 0.3048006096012192
 INTL_FOOT_TO_M = 0.3048
 
-def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None, scale_resolution="none"):
+
+def safe_open_geotiff(path: str, mode=gdal.GA_ReadOnly):
     """
-    Convert GeoTIFF files into either a RAW (r16) or PNG 
+    Safely open a GeoTIFF file with error handling.
 
     Args:
-        file: file to be replaced
-        new_file_type: new file type to be saved (png or raw)
-        output_filename: name of the new filename to save
-        precision: precision in which to save a png file. RAW files will always default to 16
-    """
+        path: Path to the GeoTIFF file.
+        mode: GDAL access mode (default: read-only).
 
-    src_ds = gdal.Open(file)
+    Returns:
+        GDAL Dataset object.
+
+    Raises:
+        InvalidGeoTIFFError: If file cannot be opened.
+    """
+    if not os.path.exists(path):
+        raise InvalidGeoTIFFError(f"GeoTIFF file not found: {path}")
+
+    ds = gdal.Open(path, mode)
+    if ds is None:
+        raise InvalidGeoTIFFError(f"Could not open GeoTIFF file: {path}")
+    return ds
+
+
+def safe_get_driver(driver_name: str):
+    """
+    Get GDAL driver with error handling.
+
+    Args:
+        driver_name: Name of the GDAL driver.
+
+    Returns:
+        GDAL Driver object.
+
+    Raises:
+        GDALDriverError: If driver is not available.
+    """
+    driver = gdal.GetDriverByName(driver_name)
+    if driver is None:
+        raise GDALDriverError(f"GDAL driver not available: {driver_name}")
+    return driver
+
+
+def safe_transform_bbox(bbox: tuple, from_crs: str, to_crs: str) -> tuple:
+    """
+    Transform bounding box coordinates with error handling.
+
+    Args:
+        bbox: (minLon, minLat, maxLon, maxLat) tuple.
+        from_crs: Source CRS (e.g., "EPSG:4326").
+        to_crs: Target CRS (e.g., "EPSG:26917").
+
+    Returns:
+        Transformed (minX, minY, maxX, maxY) tuple.
+
+    Raises:
+        CRSTransformationError: If transformation fails.
+    """
+    try:
+        transformer = Transformer.from_crs(from_crs, to_crs, always_xy=True)
+        minX, minY = transformer.transform(bbox[0], bbox[1])
+        maxX, maxY = transformer.transform(bbox[2], bbox[3])
+        return (minX, minY, maxX, maxY)
+    except CRSError as e:
+        raise CRSTransformationError(f"Failed to transform coordinates from {from_crs} to {to_crs}: {e}")
+    except Exception as e:
+        raise CRSTransformationError(f"Coordinate transformation failed: {e}")
+
+def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None, scale_resolution="none"):
+    """
+    Convert GeoTIFF files into either a RAW (r16) or PNG.
+
+    Args:
+        file: File to be converted.
+        new_file_type: New file type to be saved (png or r16).
+        output_file: Name of the new filename to save.
+        precision: Precision for PNG file (8 or 16). RAW files always use 16.
+        scale_resolution: Resolution scaling option.
+
+    Raises:
+        InvalidGeoTIFFError: If input file cannot be opened.
+        DEMError: If conversion fails.
+    """
+    src_ds = safe_open_geotiff(file)
 
     band = src_ds.GetRasterBand(1)
     min_val, max_val = band.ComputeRasterMinMax(True)
@@ -190,20 +269,29 @@ def merge(output_dir: str, files, file_type: str, precision=None, filter = False
     return code
 
 def warp_dem(input_files, out_file: str):
-    
-    
     """
-    Args:
-    input_files: an array of files to be merged/changed
-    out_file: name of the file to be changed
+    Merge and warp DEM files to a common CRS.
 
-    returns: the EPSG code to filter by
+    Args:
+        input_files: An array of files to be merged/changed.
+        out_file: Name of the output file.
+
+    Returns:
+        Tuple of (EPSG code string, units string).
+
+    Raises:
+        InvalidGeoTIFFError: If input files cannot be opened.
+        MergeError: If merge operation fails.
     """
-    
     codes = set()
     merged_files = []
-    for i in range(0, len(input_files)):
-        ds = gdal.Open(input_files[i])
+    for i in range(len(input_files)):
+        try:
+            ds = safe_open_geotiff(input_files[i])
+        except InvalidGeoTIFFError as e:
+            print(f"Warning: Skipping file {input_files[i]}: {e}")
+            continue
+
         srs = ds.GetSpatialRef()  # returns osr.SpatialReference or None
 
         if srs is None:
@@ -258,25 +346,25 @@ def warp_dem(input_files, out_file: str):
 
 
 
-def filter_dem(input_tif: str, out_file: str, code: str, bbox = None, scale_resolution="none"):
+def filter_dem(input_tif: str, out_file: str, code: str, bbox=None, scale_resolution="none"):
     """
-    Crop down the DEM file to the target location
-    
-    ARGS
-    input_tif: the tiff we are modifying/changing/saving
-    out_file: the name we should use
-    bbox: the area of interest to filter too
-    scale_resolution should we rescale this file
-    code: the epsg code we are using for the project
+    Crop down the DEM file to the target location.
+
+    Args:
+        input_tif: The tiff we are modifying/changing/saving.
+        out_file: The name we should use.
+        code: The EPSG code we are using for the project.
+        bbox: The area of interest to filter to.
+        scale_resolution: Should we rescale this file.
+
+    Raises:
+        InvalidGeoTIFFError: If input file cannot be opened.
+        CRSTransformationError: If coordinate transformation fails.
     """
-    
-    src_ds = gdal.Open(input_tif)
+    src_ds = safe_open_geotiff(input_tif)
     width, height = get_resolution(src_ds, scale_resolution)
 
-    transformer = Transformer.from_crs("EPSG:4326", code, always_xy=True)
-
-    minX, minY = transformer.transform(bbox[0], bbox[1])
-    maxX, maxY = transformer.transform(bbox[2], bbox[3])
+    minX, minY, maxX, maxY = safe_transform_bbox(bbox, "EPSG:4326", code)
    
    
     gdal.Translate(
@@ -472,7 +560,19 @@ def detect_z_units(path):
 
 
 def print_unreal_units(input_file, units="metre"):
-    ds = gdal.Open(input_file)
+    """
+    Print Unreal Engine scale units for a DEM file.
+
+    Args:
+        input_file: Path to the GeoTIFF file.
+        units: Units of the elevation data.
+    """
+    try:
+        ds = safe_open_geotiff(input_file)
+    except InvalidGeoTIFFError as e:
+        print(f"Warning: Could not calculate UE units for {input_file}: {e}")
+        return
+
     gt = ds.GetGeoTransform()
 
 
@@ -496,15 +596,28 @@ def print_unreal_units(input_file, units="metre"):
 
 
 def convert_dem_to_meters(in_path, factor=US_SURVEY_FOOT_TO_M):
+    """
+    Convert DEM elevation values from feet to meters.
+
+    Args:
+        in_path: Path to input GeoTIFF file.
+        factor: Conversion factor (default: US survey foot to meters).
+
+    Returns:
+        Path to the converted output file.
+
+    Raises:
+        InvalidGeoTIFFError: If input file cannot be opened.
+        GDALDriverError: If GTiff driver is not available.
+        DEMError: If conversion fails.
+    """
     p = Path(in_path)
     name_no_ext = p.stem
     directory = Path(in_path).parent
 
     out_path = str(directory) + "/" + str(name_no_ext) + "_converted.tif"
-    
-    src = gdal.Open(in_path, gdal.GA_ReadOnly)
-    if src is None:
-        raise RuntimeError(f"Could not open {in_path}")
+
+    src = safe_open_geotiff(in_path)
 
     band = src.GetRasterBand(1)
     nodata = band.GetNoDataValue()
@@ -521,7 +634,7 @@ def convert_dem_to_meters(in_path, factor=US_SURVEY_FOOT_TO_M):
         arr *= factor
 
     # Create output with same size/projection/geotransform
-    driver = gdal.GetDriverByName("GTiff")
+    driver = safe_get_driver("GTiff")
     # copy common creation options; tweak as needed
     options = [
         "TILED=YES",
