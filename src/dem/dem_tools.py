@@ -17,6 +17,7 @@ from exceptions import (
     MergeError,
     DEMError
 )
+from utils import get_files_to_remove, safe_remove_files
 
 VALID_RESOLUTIONS = {1009, 2017, 4033, 8129}  # UE-supported sizes (power of 2 + 1)
 US_SURVEY_FOOT_TO_M = 0.3048006096012192
@@ -427,42 +428,43 @@ def translate_and_replace(output_dir:str, input_tif:str , file_type:str, code: s
 
 
 #TODO REFACTOR REDUDANT CODE
-def remove_files(files: str, file_type:str, merge_method: str):
+def remove_files(files: dict, file_type: str, merge_method: str) -> None:
     """
-    Remove unesseccary files
+    Remove unnecessary files after merging.
+
     Args:
-    files: dictonary where the keys are folders and the filenames are the value
-    file_type: how to save the merged output (tif, png, raw)
-    merge_method: do we merge files in just projects, across projects, or both (options)
+        files: Dictionary where keys are folders and values are lists of filenames.
+        file_type: File type to keep (tif, png, r16).
+        merge_method: Merge strategy (project, all, or both).
     """
+    dem_dir = None
+
     if merge_method == "project" or merge_method == "both":
         for key in files:
             if len(files[key]) != 1:
-                folder_contents = os.listdir(key)
-                for i in range(0, len(folder_contents)):              
-                    if "merged" not in folder_contents[i] or file_type not in folder_contents[i] or "xml" in folder_contents[i]:
-                        #print(key + "/" + folder_contents[i])
-                        os.remove(key + "/" + folder_contents[i])
+                # Remove files that don't match the merged file pattern
+                files_to_remove = get_files_to_remove(key, file_type, keep_merged=True)
+                safe_remove_files(files_to_remove)
             dem_dir = key.rsplit("/", 1)[0]
-        
-        #remove top level directory contents
-        if merge_method == "both":
-            folder_contents = [f for f in os.listdir(dem_dir) if os.path.isfile(os.path.join(dem_dir, f))]
-            for i in range(0, len(folder_contents)):              
-                if "merged" not in folder_contents[i] or file_type not in folder_contents[i] or "xml" in folder_contents[i]:
-                    os.remove(dem_dir + "/" + folder_contents[i])
+
+        # Remove top level directory contents for "both" method
+        if merge_method == "both" and dem_dir:
+            files_to_remove = get_files_to_remove(dem_dir, file_type, keep_merged=True)
+            safe_remove_files(files_to_remove)
 
     elif merge_method == "all":
         for key in files:
             if os.path.exists(key):
-                shutil.rmtree(key)
+                try:
+                    shutil.rmtree(key)
+                except OSError as e:
+                    print(f"Warning: Could not remove directory {key}: {e}")
             dem_dir = key.rsplit("/", 1)[0]
-        
-        #remove top level direcot
-        folder_contents = os.listdir(dem_dir)
-        for i in range(0, len(folder_contents)):              
-            if "merged" not in folder_contents[i] or file_type not in folder_contents[i] or "xml" in folder_contents[i]:
-                os.remove(dem_dir + "/" + folder_contents[i])
+
+        # Remove top level directory contents
+        if dem_dir:
+            files_to_remove = get_files_to_remove(dem_dir, file_type, keep_merged=True)
+            safe_remove_files(files_to_remove)
 
     
 #TODO MAKE resolution unit tests 

@@ -5,16 +5,17 @@ import os
 from pathlib import Path
 
 import pdal
-from pyproj import CRS, Transformer
-from pyproj.exceptions import CRSError
+from pyproj import CRS
 
 from exceptions import (
     InvalidLASFileError,
     PDALPipelineError,
     MissingMetadataError,
     EPSGDetectionError,
-    LiDARError
+    LiDARError,
+    CRSTransformationError
 )
+from utils import CoordinateTransformer, append_to_dict_list
 
 
 def safe_execute_pipeline(pipeline_dict: dict, operation_name: str = "pipeline"):
@@ -209,9 +210,7 @@ def reproject_lidar(files: dict, out_srs: str) -> dict:
                 ]
             }
 
-            if key not in new_files:
-                new_files[key] = []
-            new_files[key].append(filename)
+            append_to_dict_list(new_files, key, filename)
 
             try:
                 _, count = safe_execute_pipeline(pipeline_def, f"reproject {input_file}")
@@ -239,10 +238,10 @@ def filter_lidar(input_clouds: dict, output_cloud_name: str, bounds: tuple) -> N
     # Transform bounds from WGS84 to target CRS
     # TODO: Make target CRS configurable instead of hardcoded
     try:
-        transformer = Transformer.from_crs("EPSG:4326", "EPSG:26917", always_xy=True)
-        minE, minN = transformer.transform(bounds[0], bounds[1])
-        maxE, maxN = transformer.transform(bounds[2], bounds[3])
-    except CRSError as e:
+        minE, minN, maxE, maxN = CoordinateTransformer.transform_bbox(
+            bounds, "EPSG:4326", "EPSG:26917"
+        )
+    except CRSTransformationError as e:
         raise LiDARError(f"Failed to transform bounds: {e}")
 
     print(f"Transformed bounds: {minE}, {minN}, {maxE}, {maxN}")

@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from lidar.lidar_tools import merge_lidar, reproject_lidar, filter_lidar
 from dem.dem_tools import convert_tiff, merge_dem, filter_dem, warp_dem
+from utils import append_to_dict_list
 from exceptions import (
     DownloadError,
     DownloadInterruptedError,
@@ -213,13 +214,9 @@ def download_data(args, download_information: list, output_dir: str) -> None:
 
         # Track files by project
         if data_type == "lidar":
-            if project_dir not in lidar_project_dirs:
-                lidar_project_dirs[project_dir] = []
-            lidar_project_dirs[project_dir].append(filename)
+            append_to_dict_list(lidar_project_dirs, project_dir, filename)
         else:
-            if project_dir not in dem_project_dirs:
-                dem_project_dirs[project_dir] = []
-            dem_project_dirs[project_dir].append(filename)
+            append_to_dict_list(dem_project_dirs, project_dir, filename)
 
         # Download the file
         try:
