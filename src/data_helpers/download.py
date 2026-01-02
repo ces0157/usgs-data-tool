@@ -25,6 +25,51 @@ CHUNK_SIZE = 8192
 DISK_SPACE_BUFFER = 1.1  # 10% buffer for disk space check
 
 
+def _load_existing_projects(output_dir: str, data_type: str) -> dict:
+    """
+    Collect already-downloaded source files so they can be reused and merged.
+
+    Args:
+        output_dir: Base output directory.
+        data_type: Type of data ("dem" or "lidar").
+
+    Returns:
+        Dictionary mapping project directories to lists of file paths.
+    """
+    projects = {}
+    type_dir = os.path.join(output_dir, data_type)
+
+    if not os.path.isdir(type_dir):
+        return projects
+
+    for project_name in os.listdir(type_dir):
+        project_dir = os.path.join(type_dir, project_name)
+        if not os.path.isdir(project_dir):
+            continue
+
+        for entry in os.listdir(project_dir):
+            full_path = os.path.join(project_dir, entry)
+            if not os.path.isfile(full_path):
+                continue
+
+            # Only keep original source files, skip merged/filtered outputs
+            lower = entry.lower()
+            if data_type == "dem":
+                if not lower.endswith(".tif") or "merged" in lower or "filtered" in lower or "warped" in lower:
+                    continue
+            elif data_type == "lidar":
+                if not (lower.endswith(".las") or lower.endswith(".laz")):
+                    continue
+            else:
+                continue
+
+            if project_dir not in projects:
+                projects[project_dir] = []
+            projects[project_dir].append(full_path)
+
+    return projects
+
+
 def validate_url(url: str) -> bool:
     """
     Validate that a URL has proper structure.
@@ -177,8 +222,9 @@ def download_data(args, download_information: list, output_dir: str) -> None:
         DownloadError: If download fails.
         MalformedURLError: If URL is malformed.
     """
-    dem_project_dirs = {}
-    lidar_project_dirs = {}
+    # Load existing projects to reuse cached data
+    dem_project_dirs = _load_existing_projects(output_dir, "dem")
+    lidar_project_dirs = _load_existing_projects(output_dir, "lidar")
     code = None  # Track CRS code for lidar reprojection
 
     print(f"Downloading {len(download_information)} {args.type} datasets")
@@ -210,7 +256,6 @@ def download_data(args, download_information: list, output_dir: str) -> None:
         os.makedirs(project_dir, exist_ok=True)
 
         filename = os.path.join(project_dir, url.split("/")[-1])
-        print(f"Saving: {filename}")
 
         # Track files by project
         if data_type == "lidar":
@@ -218,12 +263,17 @@ def download_data(args, download_information: list, output_dir: str) -> None:
         else:
             append_to_dict_list(dem_project_dirs, project_dir, filename)
 
-        # Download the file
-        try:
-            safe_download(session, url, filename)
-        except DownloadError as e:
-            print(f"Error downloading {url}: {e}")
-            continue
+        # Skip downloading if the file already exists (reuse cached data)
+        if os.path.exists(filename):
+            print(f"Found existing file, skipping download: {filename}")
+        else:
+            print(f"Saving: {filename}")
+            # Download the file
+            try:
+                safe_download(session, url, filename)
+            except DownloadError as e:
+                print(f"Error downloading {url}: {e}")
+                continue
 
         # Post-download processing for DEM files
         if data_type == "dem" and args.dem_output != "tif":
