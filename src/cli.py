@@ -2,6 +2,7 @@
 import argparse
 import os
 import json
+import sys
 # from data_helpers.fetch_files import fetch_lidar_data, fetch_dem_data
 from data_helpers.fetch_files import fetch_data_list
 from data_helpers.download import download_data

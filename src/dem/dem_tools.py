@@ -37,7 +37,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
     #print(f"precision:  {precision}")
 
 
-    width, height = get_resoltuion(src_ds, scale_resolution)
+    width, height = get_resolution(src_ds, scale_resolution)
     #print(width, height)
         
     
@@ -271,7 +271,7 @@ def filter_dem(input_tif: str, out_file: str, code: str, bbox = None, scale_reso
     """
     
     src_ds = gdal.Open(input_tif)
-    width, height = get_resoltuion(src_ds, scale_resolution)
+    width, height = get_resolution(src_ds, scale_resolution)
 
     transformer = Transformer.from_crs("EPSG:4326", code, always_xy=True)
 
@@ -307,7 +307,7 @@ def translate_and_replace(output_dir:str, input_tif:str , file_type:str, code: s
     #TODO: REFACTOR reduant code between filtered_dem and this
     tmp_file = output_dir + "/temp.tif"
     src_ds = gdal.Open(input_tif)
-    width, height = get_resoltuion(src_ds, scale_resolution)
+    width, height = get_resolution(src_ds, scale_resolution)
     
     if filter:
         output_filtered = output_dir + "/merged_filtered.tif"
@@ -378,7 +378,7 @@ def remove_files(files: str, file_type:str, merge_method: str):
 
     
 #TODO MAKE resolution unit tests 
-def get_resoltuion(src_ds, resolution: str):
+def get_resolution(src_ds, resolution: str):
     """
     Check the resolution of GeoTIFF file and change if required
 
@@ -490,8 +490,8 @@ def print_unreal_units(input_file, units="metre"):
     z_scale = (vertical_range * 100) / 512
 
     print(f"UE x scale in cm: {x_scale} for {input_file}")
-    print(f"UE y scale in cm: {y_scale}) for {input_file}")
-    print(f"UE z scale in cm: {z_scale}) for {input_file}")
+    print(f"UE y scale in cm: {y_scale} for {input_file}")
+    print(f"UE z scale in cm: {z_scale} for {input_file}")
 
 
 

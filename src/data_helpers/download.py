@@ -106,8 +106,8 @@ def download_data(args, download_information: dict, output_dir:str):
         if data_type == "dem" and args.dem_filter_type == "all":
             output_filterd = project_dir + "/" + "heightmap" + str(len(dem_project_dirs[project_dir])) + "_filtered.tif"
             output_warped = project_dir + "/warped.tif"
-            warp_dem([filename], output_warped)
-            filter_dem(output_warped, output_filterd, args.aoi, args.dem_resolution)
+            code, units = warp_dem([filename], output_warped)
+            filter_dem(output_warped, output_filterd, code, args.aoi, args.dem_resolution)
             os.remove(output_warped)
             if args.dem_output != "tif":
                 print("Converting filtered file ...")
@@ -141,7 +141,7 @@ def download_data(args, download_information: dict, output_dir:str):
             merged_files = merge_lidar(lidar_project_dirs, False)
 
         if args.lidar_filter == "filter":
-            lidar_filter(merged_files, "merged_filtered.laz", args.aoi)
+            filter_lidar(merged_files, "merged_filtered.laz", args.aoi)
 
         
 
