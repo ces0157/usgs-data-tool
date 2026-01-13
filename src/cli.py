@@ -152,6 +152,13 @@ def main():
              "Note: THIS is only supported if both and dem-merge are selected"
     )
 
+    parser.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        default=False,
+        help="Automatically answer yes to all prompts (e.g., UTM zone mismatch warnings)"
+    )
+
     args = check_arguments(parser, config_defaults, remaining_argv, pre_args)
 
     # Normalize output directory path

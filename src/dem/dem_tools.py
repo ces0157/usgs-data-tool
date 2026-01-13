@@ -153,7 +153,7 @@ def convert_tiff(file: str, new_file_type: str, output_file: str, precision=None
         )
 
 #TODO REFACTOR REDUDANT CALLS
-def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None, filter = False, bbox=None, scale_resolution='none'):
+def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, precision=None, filter = False, bbox=None, scale_resolution='none', auto_yes=False):
     """
     Merge DEM files together into a single GeoTIFF file
 
@@ -162,6 +162,7 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
     keep_files: Weather to keep the original files afterwards
     merge_method: do we merge files in just projects, across projects, or both (options)
     file_type: how to save the merged output (tif, png, raw)
+    auto_yes: automatically answer yes to prompts (e.g., UTM zone mismatch)
     """
 
     if merge_method == "project" or merge_method == "both":
@@ -188,11 +189,11 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             #this is done so we wait to rescale unitl after all files have been merged. We want to combine all at native resoltuion before crooping
             #and rescaling
             if merge_method != "both":
-                code = merge(key, files[key], file_type, precision, filter, bbox, scale_resolution)
-            
+                code = merge(key, files[key], file_type, precision, filter, bbox, scale_resolution, auto_yes)
+
             #no resizing,cropping, or conversion will occur until after everything is combined.
             else:
-                code = merge(key, files[key], "tif", precision)
+                code = merge(key, files[key], "tif", precision, auto_yes=auto_yes)
 
         #we just need to merge the merged tiff files into a singular file
         #TODO: TEST the case for both
@@ -210,7 +211,7 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
             
             #print(merged_files)
             #merge all project files together (i.e merged.tif from project1, project2, etc.)
-            code = merge(output_dir, merged_files, file_type, precision, filter, bbox, scale_resolution)
+            code = merge(output_dir, merged_files, file_type, precision, filter, bbox, scale_resolution, auto_yes)
             
             #now that we combined all merged files, ensure the merged files in each project are rescaled to target aoi and converted
             #this should only happen if a merged file exists (aka when there are more htan two files to a project)
@@ -227,10 +228,10 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
         all_files = []
         for key in files:
             all_files = all_files + files[key]
-            #get the output directory for digital elevation maps 
+            #get the output directory for digital elevation maps
             output_dir = key.rsplit("/", 1)[0]
-        
-        code = merge(output_dir, all_files, file_type, precision, filter, bbox, scale_resolution)    
+
+        code = merge(output_dir, all_files, file_type, precision, filter, bbox, scale_resolution, auto_yes)    
    
     #remove all files that are not merged files
     if not keep_files:
@@ -241,9 +242,9 @@ def merge_dem(files: dict, keep_files: bool, file_type: str, merge_method: str, 
 
 
 
-def merge(output_dir: str, files, file_type: str, precision=None, filter = False, bbox=None, scale_resolution="none"):
+def merge(output_dir: str, files, file_type: str, precision=None, filter = False, bbox=None, scale_resolution="none", auto_yes=False):
     """
-   
+
 
     Does the actual merging and conversion if nesseccary
 
@@ -251,31 +252,33 @@ def merge(output_dir: str, files, file_type: str, precision=None, filter = False
     output_dir: where we are saving too
     files: all the files that we are going to merge/convert to lat long
     file_type: how to save the merged output (tif, png, raw)
-    precision: the precision that we save too 
+    precision: the precision that we save too
     filter: crop the DEM to specified area
     bbox: the area of interest to filter too
     scale_resoltuion: how we should go about scaling.
+    auto_yes: automatically answer yes to prompts
     """
     #TODO FIX RESOLUTION PROBLEMS
-    
+
     #creates the merged file
     output_file_tif = output_dir + "/merged.tif"
-    
+
     print(f"merging files in {output_dir}")
     #merges all the files together
-    code, units = warp_dem(files, output_file_tif)
+    code, units = warp_dem(files, output_file_tif, auto_yes)
 
     translate_and_replace(output_dir, output_file_tif, file_type, code, units, precision, filter, bbox, scale_resolution)
 
     return code
 
-def warp_dem(input_files, out_file: str):
+def warp_dem(input_files, out_file: str, auto_yes=False):
     """
     Merge and warp DEM files to a common CRS.
 
     Args:
         input_files: An array of files to be merged/changed.
         out_file: Name of the output file.
+        auto_yes: Automatically answer yes to prompts.
 
     Returns:
         Tuple of (EPSG code string, units string).
@@ -324,13 +327,16 @@ def warp_dem(input_files, out_file: str):
 
     #TODO:Add a projection technique to deal with this problem
     else:
-        print("Not all files about to be merged are part of the same UTM and some distortion could occur if combined. Do you wish to continue?: ")
-        user_response = input("Do you want to proceed? (yes/no): ")
-        if user_response.lower() == "yes":
-            print("Proceeding as requested.")
-        elif user_response.lower() == "no":
-            print("Operation cancelled.")
-            sys.exit("Stopping merge")
+        print("Not all files about to be merged are part of the same UTM and some distortion could occur if combined.")
+        if auto_yes:
+            print("Auto-yes enabled, proceeding automatically.")
+        else:
+            user_response = input("Do you want to proceed? (yes/no): ")
+            if user_response.lower() == "yes":
+                print("Proceeding as requested.")
+            elif user_response.lower() == "no":
+                print("Operation cancelled.")
+                sys.exit("Stopping merge")
 
     print(merged_files)
     gdal.Warp(
