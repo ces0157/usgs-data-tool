@@ -321,7 +321,8 @@ def download_data(args, download_information: list, output_dir: str) -> None:
             args.png_precision,
             should_filter,
             args.aoi,
-            args.dem_resolution
+            args.dem_resolution,
+            args.yes
         )
 
     # Reproject LiDAR if requested
